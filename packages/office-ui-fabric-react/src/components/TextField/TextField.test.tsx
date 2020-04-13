@@ -8,8 +8,8 @@ import { resetIds, setWarningCallback, IRefObject, resetControlledWarnings } fro
 import { mountAttached, mockEvent, flushPromises } from '../../common/testUtilities';
 
 import { TextField } from './TextField';
-import { TextFieldBase, ITextFieldState } from './TextField.base';
 import { ITextFieldProps, ITextFieldStyles, ITextField } from './TextField.types';
+import { act } from 'react-dom/test-utils';
 
 // tslint:disable:jsx-no-lambda
 
@@ -23,7 +23,7 @@ const textFieldRef: IRefObject<ITextField> = (ref: ITextField | null) => {
   textField = ref!;
 };
 /** Wrapper of the TextField currently being tested */
-let wrapper: ReactWrapper<ITextFieldProps, ITextFieldState, TextFieldBase> | undefined;
+let wrapper: ReactWrapper<ITextFieldProps> | undefined;
 const noOp = () => undefined;
 
 function sharedBeforeEach() {
@@ -32,10 +32,10 @@ function sharedBeforeEach() {
 }
 
 function sharedAfterEach() {
-  if (wrapper) {
+  if (wrapper && wrapper.exists()) {
     wrapper.unmount();
-    wrapper = undefined;
   }
+  wrapper = undefined;
   textField = undefined;
 
   // Do this after umounting the wrapper to make sure any timers cleaned up on unmount are
@@ -321,7 +321,9 @@ describe('TextField with error message', () => {
     const validator = jest.fn((value: string) => (value.length > 3 ? errorMessage : ''));
 
     wrapper = mount(<TextField defaultValue="invalid value" onGetErrorMessage={validator} validateOnLoad={true} />);
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
     expect(validator).toHaveBeenCalledTimes(1);
   });
 
@@ -329,11 +331,17 @@ describe('TextField with error message', () => {
     const validator = jest.fn((value: string) => (value.length > 3 ? errorMessage : ''));
 
     wrapper = mount(<TextField onGetErrorMessage={validator} validateOnLoad={false} />);
+    act(() => {
+      jest.runAllTimers();
+    });
+    expect(validator).toHaveBeenCalledTimes(1);
 
     wrapper.find('input').simulate('input', mockEvent('also invalid'));
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
-    expect(validator).toHaveBeenCalledTimes(1);
+    expect(validator).toHaveBeenCalledTimes(2);
     assertErrorMessage(wrapper.getDOMNode(), errorMessage);
   });
 
@@ -343,7 +351,9 @@ describe('TextField with error message', () => {
     wrapper = mount(<TextField onGetErrorMessage={validator} validateOnLoad={false} />);
 
     wrapper.find('input').simulate('input', mockEvent('also invalid'));
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     expect(validator).toHaveBeenCalledTimes(1);
     assertErrorMessage(wrapper.getDOMNode(), errorMessageJSX);
@@ -357,9 +367,13 @@ describe('TextField with error message', () => {
     wrapper.find('input').simulate('input', mockEvent('also invalid'));
 
     // Extra rounds of running everything to account for the debounced validator and the promise...
-    jest.runAllTimers();
-    return flushPromises().then(() => {
+    act(() => {
       jest.runAllTimers();
+    });
+    return flushPromises().then(() => {
+      act(() => {
+        jest.runAllTimers();
+      });
 
       expect(validator).toHaveBeenCalledTimes(1);
       assertErrorMessage(wrapper!.getDOMNode(), errorMessage);
@@ -373,9 +387,13 @@ describe('TextField with error message', () => {
 
     wrapper.find('input').simulate('input', mockEvent('also invalid'));
 
-    jest.runAllTimers();
-    return flushPromises().then(() => {
+    act(() => {
       jest.runAllTimers();
+    });
+    return flushPromises().then(() => {
+      act(() => {
+        jest.runAllTimers();
+      });
 
       expect(validator).toHaveBeenCalledTimes(1);
       assertErrorMessage(wrapper!.getDOMNode(), errorMessageJSX);
@@ -385,7 +403,9 @@ describe('TextField with error message', () => {
   it('should render error message on first render when onGetErrorMessage returns a string', () => {
     const validator = jest.fn(() => errorMessage);
     wrapper = mount(<TextField defaultValue="invalid value" onGetErrorMessage={validator} />);
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     expect(validator).toHaveBeenCalledTimes(1);
     assertErrorMessage(wrapper.getDOMNode(), errorMessage);
@@ -395,9 +415,13 @@ describe('TextField with error message', () => {
     const validator = jest.fn(() => Promise.resolve(errorMessage));
     wrapper = mount(<TextField defaultValue="invalid value" onGetErrorMessage={validator} />);
 
-    jest.runAllTimers();
-    return flushPromises().then(() => {
+    act(() => {
       jest.runAllTimers();
+    });
+    return flushPromises().then(() => {
+      act(() => {
+        jest.runAllTimers();
+      });
 
       expect(validator).toHaveBeenCalledTimes(1);
       assertErrorMessage(wrapper!.getDOMNode(), errorMessage);
@@ -407,7 +431,9 @@ describe('TextField with error message', () => {
   it('should not render error message when onGetErrorMessage return an empty string', () => {
     const validator = jest.fn(() => '');
     wrapper = mount(<TextField defaultValue="invalid value" onGetErrorMessage={validator} />);
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     expect(validator).toHaveBeenCalledTimes(1);
     assertErrorMessage(wrapper.getDOMNode(), /* exist */ false);
@@ -417,7 +443,9 @@ describe('TextField with error message', () => {
     let actualValue: string | undefined = undefined;
 
     wrapper = mount(<TextField onGetErrorMessage={(value: string) => (actualValue = value)} />);
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     assertErrorMessage(wrapper.getDOMNode(), /* exist */ false);
     expect(actualValue).toEqual('');
@@ -429,12 +457,16 @@ describe('TextField with error message', () => {
     }
 
     wrapper = mount(<TextField value="initial value" onChange={noOp} onGetErrorMessage={validator} />);
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     assertErrorMessage(wrapper.getDOMNode(), errorMessage);
 
     wrapper.setProps({ value: '' });
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     assertErrorMessage(wrapper.getDOMNode(), /* exist */ false);
   });
@@ -451,12 +483,16 @@ describe('TextField with error message', () => {
         validateOnLoad={false}
       />,
     );
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
     expect(validator).toHaveBeenCalledTimes(0);
     assertErrorMessage(wrapper.getDOMNode(), false);
 
     wrapper.setProps({ value: 'failValidationValue' });
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     expect(validator).toHaveBeenCalledTimes(0);
     assertErrorMessage(wrapper.getDOMNode(), false);
@@ -474,12 +510,16 @@ describe('TextField with error message', () => {
         validateOnLoad={false}
       />,
     );
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
     expect(validator).toHaveBeenCalledTimes(0);
     assertErrorMessage(wrapper.getDOMNode(), false);
 
     wrapper.setProps({ value: 'failValidationValue' });
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
 
     expect(validator).toHaveBeenCalledTimes(0);
     assertErrorMessage(wrapper.getDOMNode(), false);

@@ -242,7 +242,7 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
             }
       >
         <input
-          aria-describedby="TextFieldDescription4"
+          aria-describedby="TextFieldDescription5"
           aria-invalid={false}
           aria-labelledby="label2"
           className=
@@ -323,7 +323,7 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
       </div>
     </div>
     <span
-      id="TextFieldDescription4"
+      id="TextFieldDescription5"
     >
       <span
         className=
@@ -413,7 +413,7 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
                   word-wrap: break-word;
                 }
             htmlFor="TextField9"
-            id="TextFieldLabel11"
+            id="TextFieldLabel10"
           >
             Wrapping default label renderer
           </label>
@@ -471,7 +471,7 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
       >
         <input
           aria-invalid={false}
-          aria-labelledby="TextFieldLabel11"
+          aria-labelledby="TextFieldLabel10"
           className=
               ms-TextField-field
               {
@@ -602,7 +602,7 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
               word-wrap: break-word;
             }
         htmlFor="TextField12"
-        id="TextFieldLabel14"
+        id="TextFieldLabel13"
       >
         Custom description rendering
       </label>
@@ -638,9 +638,9 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
             }
       >
         <input
-          aria-describedby="TextFieldDescription13"
+          aria-describedby="TextFieldDescription14"
           aria-invalid={false}
-          aria-labelledby="TextFieldLabel14"
+          aria-labelledby="TextFieldLabel13"
           className=
               ms-TextField-field
               {
@@ -719,7 +719,7 @@ exports[`Component Examples renders TextField.CustomRender.Example.tsx correctly
       </div>
     </div>
     <span
-      id="TextFieldDescription13"
+      id="TextFieldDescription14"
     >
       <span
         className=

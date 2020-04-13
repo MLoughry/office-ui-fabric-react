@@ -53,7 +53,7 @@ exports[`MaskedTextField renders correctly 1`] = `
             word-wrap: break-word;
           }
       htmlFor="TextField0"
-      id="TextFieldLabel2"
+      id="TextFieldLabel1"
     >
       With input mask
     </label>
@@ -90,7 +90,7 @@ exports[`MaskedTextField renders correctly 1`] = `
     >
       <input
         aria-invalid={false}
-        aria-labelledby="TextFieldLabel2"
+        aria-labelledby="TextFieldLabel1"
         className=
             ms-TextField-field
             {

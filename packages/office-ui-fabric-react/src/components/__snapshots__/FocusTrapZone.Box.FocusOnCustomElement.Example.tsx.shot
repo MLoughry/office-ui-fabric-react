@@ -450,7 +450,7 @@ exports[`Component Examples renders FocusTrapZone.Box.FocusOnCustomElement.Examp
                   word-wrap: break-word;
                 }
             htmlFor="TextField4"
-            id="TextFieldLabel6"
+            id="TextFieldLabel5"
           >
             Input inside trap zone
           </label>
@@ -487,7 +487,7 @@ exports[`Component Examples renders FocusTrapZone.Box.FocusOnCustomElement.Examp
           >
             <input
               aria-invalid={false}
-              aria-labelledby="TextFieldLabel6"
+              aria-labelledby="TextFieldLabel5"
               className=
                   ms-TextField-field
                   {

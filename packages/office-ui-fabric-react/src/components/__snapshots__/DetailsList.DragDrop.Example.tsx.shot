@@ -241,7 +241,7 @@ exports[`Component Examples renders DetailsList.DragDrop.Example.tsx correctly 1
                 word-wrap: break-word;
               }
           htmlFor="TextField1"
-          id="TextFieldLabel3"
+          id="TextFieldLabel2"
         >
           Number of left frozen columns
         </label>
@@ -279,7 +279,7 @@ exports[`Component Examples renders DetailsList.DragDrop.Example.tsx correctly 1
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel3"
+            aria-labelledby="TextFieldLabel2"
             className=
                 ms-TextField-field
                 {
@@ -410,7 +410,7 @@ exports[`Component Examples renders DetailsList.DragDrop.Example.tsx correctly 1
                 word-wrap: break-word;
               }
           htmlFor="TextField4"
-          id="TextFieldLabel6"
+          id="TextFieldLabel5"
         >
           Number of right frozen columns
         </label>
@@ -448,7 +448,7 @@ exports[`Component Examples renders DetailsList.DragDrop.Example.tsx correctly 1
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel6"
+            aria-labelledby="TextFieldLabel5"
             className=
                 ms-TextField-field
                 {

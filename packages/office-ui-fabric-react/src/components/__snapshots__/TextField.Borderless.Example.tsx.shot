@@ -108,7 +108,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
                 word-wrap: break-word;
               }
           htmlFor="TextField0"
-          id="TextFieldLabel2"
+          id="TextFieldLabel1"
         >
           Standard:
         </label>
@@ -147,7 +147,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel2"
+            aria-labelledby="TextFieldLabel1"
             className=
                 ms-TextField-field
                 {
@@ -294,7 +294,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
                 color: GrayText;
               }
           htmlFor="TextField3"
-          id="TextFieldLabel5"
+          id="TextFieldLabel4"
         >
           Disabled:
         </label>
@@ -332,7 +332,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel5"
+            aria-labelledby="TextFieldLabel4"
             className=
                 ms-TextField-field
                 {
@@ -485,7 +485,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
                 padding-right: 12px;
               }
           htmlFor="TextField6"
-          id="TextFieldLabel8"
+          id="TextFieldLabel7"
         >
           Required:
         </label>
@@ -524,7 +524,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel8"
+            aria-labelledby="TextFieldLabel7"
             className=
                 ms-TextField-field
                 {
@@ -681,7 +681,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
                 word-wrap: break-word;
               }
           htmlFor="TextField9"
-          id="TextFieldLabel11"
+          id="TextFieldLabel10"
         >
           Borderless single-line TextField
         </label>
@@ -718,7 +718,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel11"
+            aria-labelledby="TextFieldLabel10"
             className=
                 ms-TextField-field
                 {
@@ -852,7 +852,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
                 word-wrap: break-word;
               }
           htmlFor="TextField12"
-          id="TextFieldLabel14"
+          id="TextFieldLabel13"
         >
           Borderless multi-line TextField
         </label>
@@ -890,7 +890,7 @@ exports[`Component Examples renders TextField.Borderless.Example.tsx correctly 1
         >
           <textarea
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel14"
+            aria-labelledby="TextFieldLabel13"
             className=
                 ms-TextField-field
                 {

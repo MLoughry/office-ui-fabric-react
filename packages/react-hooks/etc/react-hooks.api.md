@@ -4,6 +4,8 @@
 
 ```ts
 
+import { Async } from '@uifabric/utilities';
+import { IRenderFunction } from '@uifabric/utilities';
 import * as React from 'react';
 
 // @public
@@ -12,6 +14,14 @@ export interface IUseBooleanCallbacks {
     setTrue: () => void;
     toggle: () => void;
 }
+
+// @public (undocumented)
+export type RenderFunctionNames<TProps extends {}> = {
+    [K in keyof TProps]: any extends TProps[K] ? never : IRenderFunction<TProps> extends TProps[K] ? K : never;
+}[keyof TProps];
+
+// @public (undocumented)
+export function useAsync(): Async;
 
 // @public
 export function useBoolean(initialState: boolean): [boolean, IUseBooleanCallbacks];
@@ -35,6 +45,9 @@ export function useId(prefix?: string, providedId?: string): string;
 
 // @public
 export function useMergedRefs<T>(...refs: React.Ref<T>[]): (value: T) => void;
+
+// @public (undocumented)
+export function useRenderFunction<TProps extends {}, TRenderFunctionName extends RenderFunctionNames<TProps>>(props: TProps, renderFunctionName: TRenderFunctionName, defaultRender: (props: TProps) => JSX.Element | null): () => JSX.Element | null;
 
 
 // (No @packageDocumentation comment for this package)

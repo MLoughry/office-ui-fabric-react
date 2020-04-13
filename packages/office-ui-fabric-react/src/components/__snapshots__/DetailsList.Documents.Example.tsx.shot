@@ -431,7 +431,7 @@ exports[`Component Examples renders DetailsList.Documents.Example.tsx correctly 
                 word-wrap: break-word;
               }
           htmlFor="TextField2"
-          id="TextFieldLabel4"
+          id="TextFieldLabel3"
         >
           Filter by name:
         </label>
@@ -468,7 +468,7 @@ exports[`Component Examples renders DetailsList.Documents.Example.tsx correctly 
         >
           <input
             aria-invalid={false}
-            aria-labelledby="TextFieldLabel4"
+            aria-labelledby="TextFieldLabel3"
             className=
                 ms-TextField-field
                 {

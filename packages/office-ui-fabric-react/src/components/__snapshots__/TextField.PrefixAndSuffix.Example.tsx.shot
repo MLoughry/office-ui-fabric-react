@@ -95,7 +95,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
                 word-wrap: break-word;
               }
           htmlFor="TextField0"
-          id="TextFieldLabel2"
+          id="TextFieldLabel1"
         >
           With prefix
         </label>
@@ -160,7 +160,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
           <input
             aria-invalid={false}
             aria-label="Example text field with https:// prefix"
-            aria-labelledby="TextFieldLabel2"
+            aria-labelledby="TextFieldLabel1"
             className=
                 ms-TextField-field
                 {
@@ -295,7 +295,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
                 color: GrayText;
               }
           htmlFor="TextField3"
-          id="TextFieldLabel5"
+          id="TextFieldLabel4"
         >
           Disabled with prefix
         </label>
@@ -358,7 +358,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
           <input
             aria-invalid={false}
             aria-label="Example text field with https:// prefix"
-            aria-labelledby="TextFieldLabel5"
+            aria-labelledby="TextFieldLabel4"
             className=
                 ms-TextField-field
                 {
@@ -513,7 +513,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
                 word-wrap: break-word;
               }
           htmlFor="TextField6"
-          id="TextFieldLabel8"
+          id="TextFieldLabel7"
         >
           With suffix
         </label>
@@ -551,7 +551,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
           <input
             aria-invalid={false}
             aria-label="Example text field with .com suffix"
-            aria-labelledby="TextFieldLabel8"
+            aria-labelledby="TextFieldLabel7"
             className=
                 ms-TextField-field
                 {
@@ -709,7 +709,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
                 word-wrap: break-word;
               }
           htmlFor="TextField9"
-          id="TextFieldLabel11"
+          id="TextFieldLabel10"
         >
           With prefix and suffix
         </label>
@@ -774,7 +774,7 @@ exports[`Component Examples renders TextField.PrefixAndSuffix.Example.tsx correc
           <input
             aria-invalid={false}
             aria-label="Example text field with https:// prefix and .com suffix"
-            aria-labelledby="TextFieldLabel11"
+            aria-labelledby="TextFieldLabel10"
             className=
                 ms-TextField-field
                 {

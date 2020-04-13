@@ -2373,7 +2373,7 @@ exports[`Component Examples renders Stack.Vertical.Configure.Example.tsx correct
                         word-wrap: break-word;
                       }
                   htmlFor="TextField11"
-                  id="TextFieldLabel13"
+                  id="TextFieldLabel12"
                 >
                   List of empty children (e.g. 1 2 3):
                 </label>
@@ -2410,7 +2410,7 @@ exports[`Component Examples renders Stack.Vertical.Configure.Example.tsx correct
                 >
                   <input
                     aria-invalid={false}
-                    aria-labelledby="TextFieldLabel13"
+                    aria-labelledby="TextFieldLabel12"
                     className=
                         ms-TextField-field
                         {
