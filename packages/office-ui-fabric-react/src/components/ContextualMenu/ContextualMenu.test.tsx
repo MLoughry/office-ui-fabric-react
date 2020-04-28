@@ -12,6 +12,7 @@ import { canAnyMenuItemsCheck } from './ContextualMenu.base';
 import { IContextualMenuItem, ContextualMenuItemType } from './ContextualMenu.types';
 import { IContextualMenuRenderItem, IContextualMenuItemStyles } from './ContextualMenuItem.types';
 import { DefaultButton, IButton } from 'office-ui-fabric-react/lib/Button';
+import { act } from 'react-dom/test-utils';
 
 describe('ContextualMenu', () => {
   afterEach(() => {
@@ -891,7 +892,9 @@ describe('ContextualMenu', () => {
 
     const menuItem = document.querySelector('button.ms-ContextualMenu-link') as HTMLButtonElement;
 
-    ReactTestUtils.Simulate.click(menuItem);
+    act(() => {
+      ReactTestUtils.Simulate.click(menuItem);
+    });
 
     expect(subMenuOpened).toEqual(true);
   });

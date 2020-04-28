@@ -131,3 +131,25 @@ function getResponsiveMode(currentWindow: Window | undefined): ResponsiveMode {
 
   return responsiveMode;
 }
+
+export function useResponsiveMode<TElement extends Element>(componentRoot: React.RefObject<TElement | null>) {
+  const [responsiveMode, setResponsiveModeState] = React.useState<ResponsiveMode>(
+    _defaultMode || _lastMode || ResponsiveMode.large,
+  );
+
+  const onResize = () => {
+    const currentWindow = (componentRoot.current && getWindow(componentRoot.current)) || window;
+    setResponsiveModeState(getResponsiveMode(currentWindow));
+  };
+
+  React.useEffect(() => {
+    const events = new EventGroup({});
+
+    events.on(window, 'resize', onResize);
+    onResize();
+
+    return () => events.dispose();
+  }, []);
+
+  return responsiveMode;
+}

@@ -38,7 +38,11 @@ import {
   memoizeFunction,
 } from '../../Utilities';
 import { hasSubmenu, getIsChecked, isItemDisabled } from '../../utilities/contextualMenu/index';
-import { withResponsiveMode, ResponsiveMode } from '../../utilities/decorators/withResponsiveMode';
+import {
+  ResponsiveMode,
+  useResponsiveMode,
+  IWithResponsiveModeState,
+} from '../../utilities/decorators/withResponsiveMode';
 import { Callout, ICalloutContentStyleProps, ICalloutContentStyles, Target } from '../../Callout';
 import { ContextualMenuItem } from './ContextualMenuItem';
 import {
@@ -49,6 +53,7 @@ import {
 import { IProcessedStyleSet, concatStyleSetsWithProps } from '../../Styling';
 import { IContextualMenuItemStyleProps, IContextualMenuItemStyles } from './ContextualMenuItem.types';
 import { getItemStyles } from './ContextualMenu.classNames';
+import { useMergedRefs } from '@uifabric/react-hooks';
 
 const getClassNames = classNamesFunction<IContextualMenuStyleProps, IContextualMenuStyles>();
 const getContextualMenuItemClassNames = classNamesFunction<IContextualMenuItemStyleProps, IContextualMenuItemStyles>();
@@ -102,8 +107,89 @@ const _getMenuItemStylesFunction = memoizeFunction(
   },
 );
 
-@withResponsiveMode
-export class ContextualMenuBase extends React.Component<IContextualMenuProps, IContextualMenuState> {
+function useTarget(props: IContextualMenuProps, hostElement: React.RefObject<HTMLDivElement | null>) {
+  const [target, setTarget] = React.useState<Element | MouseEvent | Point | null>(null);
+  const targetWindowRef = React.useRef<Window>();
+
+  React.useEffect(() => {
+    if (props.target) {
+      if (typeof props.target === 'string') {
+        const currentDoc: Document = getDocument(hostElement.current)!;
+        setTarget(currentDoc ? (currentDoc.querySelector(props.target) as Element) : null);
+        targetWindowRef.current = getWindow(hostElement.current)!;
+      } else if (!!(props.target as MouseEvent).stopPropagation) {
+        targetWindowRef.current = getWindow((props.target as MouseEvent).target as HTMLElement)!;
+        setTarget(props.target as MouseEvent);
+      } else if (
+        // tslint:disable-next-line:deprecation
+        ((props.target as Point).left !== undefined || (props.target as Point).x !== undefined) &&
+        // tslint:disable-next-line:deprecation
+        ((props.target as Point).top !== undefined || (props.target as Point).y !== undefined)
+      ) {
+        targetWindowRef.current = getWindow(hostElement.current)!;
+        setTarget(props.target as Point);
+      } else if ((props.target as React.RefObject<Element>).current !== undefined) {
+        setTarget((props.target as React.RefObject<Element>).current);
+        targetWindowRef.current = getWindow((props.target as React.RefObject<Element>).current);
+      } else {
+        const targetElement: Element = props.target as Element;
+        targetWindowRef.current = getWindow(targetElement)!;
+        setTarget(props.target as Element);
+      }
+    } else {
+      setTarget(null);
+      targetWindowRef.current = getWindow(hostElement.current)!;
+    }
+  }, [props.target]);
+
+  return [target, targetWindowRef] as const;
+}
+
+function useShowHideHandlers(props: IContextualMenuProps, targetWindowRef: React.RefObject<Window | undefined>) {
+  React.useEffect(() => {
+    if (!props.hidden) {
+      const eventGroup = new EventGroup({});
+
+      props.onMenuOpened?.();
+      eventGroup.on(targetWindowRef.current, 'resize', () => props.onDismiss?.());
+
+      return () => {
+        props.onMenuDismissed?.();
+        eventGroup.dispose();
+      };
+    }
+  }, [!!props.hidden]);
+}
+
+export const ContextualMenuBase = React.forwardRef(
+  (props: IContextualMenuProps, forwardedRef: React.Ref<HTMLDivElement>) => {
+    const rootRef = React.useRef<HTMLDivElement | null>(null);
+    const mergedRootRef = useMergedRefs(rootRef, forwardedRef);
+    const responsiveMode = useResponsiveMode(rootRef);
+
+    const [target, targetWindowRef] = useTarget(props, rootRef);
+    useShowHideHandlers(props, targetWindowRef);
+
+    return (
+      <ContextualMenuBaseClass
+        {...props}
+        domRef={mergedRootRef}
+        responsiveMode={responsiveMode}
+        _target={target}
+        _targetWindow={targetWindowRef}
+      />
+    );
+  },
+);
+
+class ContextualMenuBaseClass extends React.Component<
+  IContextualMenuProps & {
+    domRef: (ref: HTMLDivElement | null) => void;
+    _target: Element | MouseEvent | Point | null;
+    _targetWindow: React.RefObject<Window | undefined>;
+  } & IWithResponsiveModeState,
+  IContextualMenuState
+> {
   // The default ContextualMenu properties have no items and beak, the default submenu direction is right and top.
   public static defaultProps: IContextualMenuProps = {
     items: [],
@@ -114,14 +200,11 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
   };
 
   private _async: Async;
-  private _events: EventGroup;
   private _id: string;
   private _host: HTMLElement;
   private _previousActiveElement: HTMLElement | null;
   private _isFocusingPreviousElement: boolean;
   private _enterTimerId: number | undefined;
-  private _targetWindow: Window;
-  private _target: Element | MouseEvent | Point | null;
   private _isScrollIdle: boolean;
   private _scrollIdleTimeoutId: number | undefined;
   /** True if the most recent keydown event was for alt (option) or meta (command). */
@@ -135,11 +218,10 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
   // tslint:disable-next-line:deprecation
   private _classNames: IProcessedStyleSet<IContextualMenuStyles> | IContextualMenuClassNames;
 
-  constructor(props: IContextualMenuProps) {
+  constructor(props: any) {
     super(props);
 
     this._async = new Async(this);
-    this._events = new EventGroup(this);
     initializeComponentRef(this);
 
     warnDeprecations(COMPONENT_NAME, props, {
@@ -177,18 +259,13 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
 
   // tslint:disable-next-line function-name
   public UNSAFE_componentWillUpdate(newProps: IContextualMenuProps): void {
-    if (newProps.target !== this.props.target) {
-      const newTarget = newProps.target;
-      this._setTargetWindowAndElement(newTarget!);
-    }
-
     if (this._isHidden(newProps) !== this._isHidden(this.props)) {
       if (this._isHidden(newProps)) {
         this._onMenuClosed();
       } else {
         this._onMenuOpened();
-        this._previousActiveElement = this._targetWindow
-          ? (this._targetWindow.document.activeElement as HTMLElement)
+        this._previousActiveElement = this.props._targetWindow.current
+          ? (this.props._targetWindow.current.document.activeElement as HTMLElement)
           : null;
       }
     }
@@ -204,11 +281,9 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
   // Invoked once, both on the client and server, immediately before the initial rendering occurs.
   // tslint:disable-next-line function-name
   public UNSAFE_componentWillMount() {
-    const target = this.props.target;
-    this._setTargetWindowAndElement(target!);
     if (!this.props.hidden) {
-      this._previousActiveElement = this._targetWindow
-        ? (this._targetWindow.document.activeElement as HTMLElement)
+      this._previousActiveElement = this.props._targetWindow.current
+        ? (this.props._targetWindow.current.document.activeElement as HTMLElement)
         : null;
     }
   }
@@ -230,7 +305,6 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
       this.props.onMenuDismissed(this.props);
     }
 
-    this._events.dispose();
     this._async.dispose();
     this._mounted = false;
   }
@@ -306,7 +380,7 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
      * When useTargetWidth is true, get the width of the target element and apply it for the context menu container
      */
     let contextMenuStyle;
-    const targetAsHtmlElement = this._target as HTMLElement;
+    const targetAsHtmlElement = this.props._target as HTMLElement;
     if ((useTargetWidth || useTargetAsMinWidth) && targetAsHtmlElement && targetAsHtmlElement.offsetWidth) {
       const targetBoundingRect = targetAsHtmlElement.getBoundingClientRect();
       const targetWidth = targetBoundingRect.width - 2 /* Accounts for 1px border */;
@@ -364,7 +438,10 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
             aria-label={ariaLabel}
             aria-labelledby={labelElementId}
             style={contextMenuStyle}
-            ref={(host: HTMLDivElement) => (this._host = host)}
+            ref={(host: HTMLDivElement) => {
+              this._host = host;
+              this.props.domRef(host);
+            }}
             id={id}
             className={this._classNames.container}
             tabIndex={shouldFocusOnContainer ? 0 : -1}
@@ -411,19 +488,12 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
   }
 
   private _onMenuOpened() {
-    this._events.on(this._targetWindow, 'resize', this.dismiss);
     this._shouldUpdateFocusOnMouseEvent = !this.props.delayUpdateFocusOnHover;
     this._gotMouseMove = false;
-    this.props.onMenuOpened && this.props.onMenuOpened(this.props);
   }
 
   private _onMenuClosed() {
-    this._events.off(this._targetWindow, 'resize', this.dismiss);
     this._tryFocusPreviousActiveElement();
-
-    if (this.props.onMenuDismissed) {
-      this.props.onMenuDismissed(this.props);
-    }
 
     this._shouldUpdateFocusOnMouseEvent = !this.props.delayUpdateFocusOnHover;
 
@@ -1035,7 +1105,7 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
     if (
       !this._isScrollIdle ||
       this._enterTimerId !== undefined ||
-      targetElement === (this._targetWindow.document.activeElement as HTMLElement)
+      targetElement === (this.props._targetWindow.current?.document?.activeElement as HTMLElement)
     ) {
       return;
     }
@@ -1297,38 +1367,6 @@ export class ContextualMenuBase extends React.Component<IContextualMenuProps, IC
       });
     }
   };
-
-  private _setTargetWindowAndElement(target: Target): void {
-    const currentElement = this._host;
-
-    if (target) {
-      if (typeof target === 'string') {
-        const currentDoc: Document = getDocument(currentElement)!;
-        this._target = currentDoc ? (currentDoc.querySelector(target) as Element) : null;
-        this._targetWindow = getWindow(currentElement)!;
-      } else if (!!(target as MouseEvent).stopPropagation) {
-        this._targetWindow = getWindow((target as MouseEvent).target as HTMLElement)!;
-        this._target = target as MouseEvent;
-      } else if (
-        // tslint:disable-next-line:deprecation
-        ((target as Point).left !== undefined || (target as Point).x !== undefined) &&
-        // tslint:disable-next-line:deprecation
-        ((target as Point).top !== undefined || (target as Point).y !== undefined)
-      ) {
-        this._targetWindow = getWindow(currentElement)!;
-        this._target = target as Point;
-      } else if ((target as React.RefObject<Element>).current !== undefined) {
-        this._target = (target as React.RefObject<Element>).current;
-        this._targetWindow = getWindow(this._target)!;
-      } else {
-        const targetElement: Element = target as Element;
-        this._targetWindow = getWindow(targetElement)!;
-        this._target = target as Element;
-      }
-    } else {
-      this._targetWindow = getWindow(currentElement)!;
-    }
-  }
 
   private _getSubMenuId = (item: IContextualMenuItem): string | undefined => {
     let { subMenuId } = this.state;
