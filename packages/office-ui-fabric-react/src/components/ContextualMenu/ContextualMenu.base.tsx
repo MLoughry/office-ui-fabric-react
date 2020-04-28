@@ -62,7 +62,6 @@ export interface IContextualMenuState {
   expandedMenuItemKey?: string;
   /** True if the menu was expanded by mouse click OR hover (as opposed to by keyboard) */
   expandedByMouseClick?: boolean;
-  dismissedMenuItemKey?: string;
   contextualMenuItems?: IContextualMenuItem[];
   contextualMenuTarget?: Element;
   submenuTarget?: Element;
@@ -501,7 +500,6 @@ class ContextualMenuBaseClass extends React.Component<
     // so that when the menu is shown again, the submenu is collapsed
     this.setState({
       expandedByMouseClick: undefined,
-      dismissedMenuItemKey: undefined,
       expandedMenuItemKey: undefined,
       submenuTarget: undefined,
     });
@@ -1361,7 +1359,6 @@ class ContextualMenuBaseClass extends React.Component<
       this.dismiss(ev, dismissAll);
     } else if (this._mounted) {
       this.setState({
-        dismissedMenuItemKey: this.state.expandedMenuItemKey,
         expandedMenuItemKey: undefined,
         submenuTarget: undefined,
       });
