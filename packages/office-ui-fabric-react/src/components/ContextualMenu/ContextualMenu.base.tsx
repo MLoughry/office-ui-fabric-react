@@ -53,7 +53,7 @@ import {
 import { IProcessedStyleSet, concatStyleSetsWithProps } from '../../Styling';
 import { IContextualMenuItemStyleProps, IContextualMenuItemStyles } from './ContextualMenuItem.types';
 import { getItemStyles } from './ContextualMenu.classNames';
-import { useMergedRefs } from '@uifabric/react-hooks';
+import { useMergedRefs, useConst, useId } from '@uifabric/react-hooks';
 
 const getClassNames = classNamesFunction<IContextualMenuStyleProps, IContextualMenuStyles>();
 const getContextualMenuItemClassNames = classNamesFunction<IContextualMenuItemStyleProps, IContextualMenuItemStyles>();
@@ -144,17 +144,39 @@ function useTarget(props: IContextualMenuProps, hostElement: React.RefObject<HTM
   return [target, targetWindowRef] as const;
 }
 
+function useEventGroup() {
+  const eventGroup = useConst(() => new EventGroup({}));
+
+  React.useEffect(
+    () => () => {
+      eventGroup.dispose;
+    },
+    [],
+  );
+
+  return eventGroup;
+}
+
 function useShowHideHandlers(props: IContextualMenuProps, targetWindowRef: React.RefObject<Window | undefined>) {
+  const eventGroup = useEventGroup();
+
   React.useEffect(() => {
     if (!props.hidden) {
-      const eventGroup = new EventGroup({});
+      const onDismissCallback = () => props.onDismiss?.();
+      eventGroup.on(targetWindowRef.current, 'resize', onDismissCallback);
 
+      return () => {
+        eventGroup.off(targetWindowRef.current, 'resize', onDismissCallback);
+      };
+    }
+  }, [!!props.hidden, props.onDismiss]);
+
+  React.useEffect(() => {
+    if (!props.hidden) {
       props.onMenuOpened?.();
-      eventGroup.on(targetWindowRef.current, 'resize', () => props.onDismiss?.());
 
       return () => {
         props.onMenuDismissed?.();
-        eventGroup.dispose();
       };
     }
   }, [!!props.hidden]);
@@ -165,6 +187,7 @@ export const ContextualMenuBase = React.forwardRef(
     const rootRef = React.useRef<HTMLDivElement | null>(null);
     const mergedRootRef = useMergedRefs(rootRef, forwardedRef);
     const responsiveMode = useResponsiveMode(rootRef);
+    const id = useId('ContextualMenu', props.id);
 
     const [target, targetWindowRef] = useTarget(props, rootRef);
     useShowHideHandlers(props, targetWindowRef);
@@ -176,6 +199,7 @@ export const ContextualMenuBase = React.forwardRef(
         responsiveMode={responsiveMode}
         _target={target}
         _targetWindow={targetWindowRef}
+        id={id}
       />
     );
   },
@@ -232,7 +256,6 @@ class ContextualMenuBaseClass extends React.Component<
       subMenuId: getId('ContextualMenu'),
     };
 
-    this._id = props.id || getId('ContextualMenu');
     this._isFocusingPreviousElement = false;
     this._isScrollIdle = true;
     this._shouldUpdateFocusOnMouseEvent = !this.props.delayUpdateFocusOnHover;
