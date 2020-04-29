@@ -51,7 +51,11 @@ import {
   ContextualMenuAnchor,
 } from './ContextualMenuItemWrapper/index';
 import { IProcessedStyleSet, concatStyleSetsWithProps } from '../../Styling';
-import { IContextualMenuItemStyleProps, IContextualMenuItemStyles } from './ContextualMenuItem.types';
+import {
+  IContextualMenuItemStyleProps,
+  IContextualMenuItemStyles,
+  IContextualMenuItemProps,
+} from './ContextualMenuItem.types';
 import { getItemStyles } from './ContextualMenu.classNames';
 import { useMergedRefs, useConst, useId } from '@uifabric/react-hooks';
 
@@ -239,6 +243,50 @@ const ContextualMenuSeparator: React.FunctionComponent<IContextualMenuSeparatorP
   return null;
 };
 ContextualMenuSeparator.displayName = 'ContextualMenuSeparator';
+
+interface IContextualMenuHeaderItemProps {
+  contextualMenuItemAs?: React.ComponentType<IContextualMenuItemProps>;
+  item: IContextualMenuItem;
+  // tslint:disable-next-line:deprecation
+  itemClassNames: IMenuItemClassNames;
+  index: number;
+  hasCheckmarks: boolean;
+  hasIcons: boolean;
+  onItemClick: (
+    item: IContextualMenuItem,
+    ev: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
+  ) => void;
+  // tslint:disable-next-line:deprecation
+  menuClassNames: IProcessedStyleSet<IContextualMenuStyles> | IContextualMenuClassNames;
+}
+
+const ContextualMenuHeaderItem: React.FunctionComponent<IContextualMenuHeaderItemProps> = ({
+  contextualMenuItemAs: ChildrenRenderer = ContextualMenuItem,
+  item,
+  itemClassNames,
+  index,
+  hasCheckmarks,
+  hasIcons,
+  onItemClick,
+  menuClassNames,
+}: IContextualMenuHeaderItemProps) => {
+  const { itemProps, id } = item;
+  const divHtmlProperties = itemProps && getNativeProps<React.HTMLAttributes<HTMLDivElement>>(itemProps, divProperties);
+  return (
+    // tslint:disable-next-line:deprecation
+    <div id={id} className={menuClassNames.header} {...divHtmlProperties} style={item.style}>
+      <ChildrenRenderer
+        item={item}
+        classNames={itemClassNames}
+        index={index}
+        onCheckmarkClick={hasCheckmarks ? onItemClick : undefined}
+        hasIcons={hasIcons}
+        {...itemProps}
+      />
+    </div>
+  );
+};
+ContextualMenuHeaderItem.displayName = 'ContextualMenuHeaderItem';
 
 class ContextualMenuBaseClass extends React.Component<
   IContextualMenuProps & {
@@ -686,7 +734,19 @@ class ContextualMenuBaseClass extends React.Component<
         renderedItems.push(
           <ContextualMenuSeparator key={`separator-${index}`} index={index} classNames={itemClassNames} />,
         );
-        const headerItem = this._renderHeaderMenuItem(item, itemClassNames, index, hasCheckmarks, hasIcons);
+        const headerItem = (
+          <ContextualMenuHeaderItem
+            key={`header-${index}`}
+            contextualMenuItemAs={this.props.contextualMenuItemAs}
+            item={item}
+            itemClassNames={itemClassNames}
+            index={index}
+            hasCheckmarks={hasCheckmarks}
+            hasIcons={hasIcons}
+            onItemClick={this._onItemClick}
+            menuClassNames={this._classNames}
+          />
+        );
         renderedItems.push(this._renderListItem(headerItem, item.key || index, itemClassNames, item.title));
         break;
       case ContextualMenuItemType.Section:
@@ -737,7 +797,19 @@ class ContextualMenuBaseClass extends React.Component<
         role: 'group',
         'aria-labelledby': id,
       };
-      headerItem = this._renderHeaderMenuItem(headerContextualMenuItem, menuClassNames, index, hasCheckmarks, hasIcons);
+      headerItem = (
+        <ContextualMenuHeaderItem
+          key={`header-${index}`}
+          contextualMenuItemAs={this.props.contextualMenuItemAs}
+          item={headerContextualMenuItem}
+          itemClassNames={menuClassNames}
+          index={index}
+          hasCheckmarks={hasCheckmarks}
+          hasIcons={hasIcons}
+          onItemClick={this._onItemClick}
+          menuClassNames={this._classNames}
+        />
+      );
     }
 
     if (sectionProps.items && sectionProps.items.length > 0) {
@@ -842,33 +914,6 @@ class ContextualMenuBaseClass extends React.Component<
       totalItemCount,
       hasCheckmarks,
       hasIcons,
-    );
-  }
-
-  private _renderHeaderMenuItem(
-    item: IContextualMenuItem,
-    // tslint:disable-next-line:deprecation
-    classNames: IMenuItemClassNames,
-    index: number,
-    hasCheckmarks: boolean,
-    hasIcons: boolean,
-  ): React.ReactNode {
-    const { contextualMenuItemAs: ChildrenRenderer = ContextualMenuItem } = this.props;
-    const { itemProps, id } = item;
-    const divHtmlProperties =
-      itemProps && getNativeProps<React.HTMLAttributes<HTMLDivElement>>(itemProps, divProperties);
-    return (
-      // tslint:disable-next-line:deprecation
-      <div id={id} className={this._classNames.header} {...divHtmlProperties} style={item.style}>
-        <ChildrenRenderer
-          item={item}
-          classNames={classNames}
-          index={index}
-          onCheckmarkClick={hasCheckmarks ? this._onItemClick : undefined}
-          hasIcons={hasIcons}
-          {...itemProps}
-        />
-      </div>
     );
   }
 
