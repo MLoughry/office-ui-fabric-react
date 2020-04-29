@@ -206,6 +206,19 @@ export const ContextualMenuBase = React.forwardRef(
 );
 ContextualMenuBase.displayName = 'ContextualMenuBase';
 
+function getSubMenuRenderFunction(props: IContextualMenuProps) {
+  const onRenderSubMenu = () => {
+    throw Error(
+      'ContextualMenuBase: onRenderSubMenu callback is null or undefined. ' +
+        'Please ensure to set `onRenderSubMenu` property either manually or with `styled` helper.',
+    );
+  };
+
+  return props.onRenderSubMenu
+    ? (subMenuProps: IContextualMenuProps) => props.onRenderSubMenu!(subMenuProps, onRenderSubMenu)
+    : onRenderSubMenu;
+}
+
 class ContextualMenuBaseClass extends React.Component<
   IContextualMenuProps & {
     domRef: (ref: HTMLDivElement | null) => void;
@@ -359,7 +372,6 @@ class ContextualMenuBaseClass extends React.Component<
       styles,
       theme,
       calloutProps,
-      onRenderSubMenu = this._onRenderSubMenu,
       onRenderMenuList = this._onRenderMenuList,
       focusZoneProps,
       // tslint:disable-next-line:deprecation
@@ -492,7 +504,7 @@ class ContextualMenuBaseClass extends React.Component<
                 )}
               </FocusZone>
             ) : null}
-            {submenuProps && onRenderSubMenu(submenuProps, this._onRenderSubMenu)}
+            {submenuProps && getSubMenuRenderFunction(this.props)(submenuProps)}
           </div>
         </Callout>
       );
@@ -550,16 +562,6 @@ class ContextualMenuBaseClass extends React.Component<
     return focusZoneProps && focusZoneProps.direction !== undefined
       ? focusZoneProps.direction
       : FocusZoneDirection.vertical;
-  }
-
-  private _onRenderSubMenu(
-    subMenuProps: IContextualMenuProps,
-    defaultRender?: IRenderFunction<IContextualMenuProps>,
-  ): JSX.Element {
-    throw Error(
-      'ContextualMenuBase: onRenderSubMenu callback is null or undefined. ' +
-        'Please ensure to set `onRenderSubMenu` property either manually or with `styled` helper.',
-    );
   }
 
   private _onRenderMenuList = (
