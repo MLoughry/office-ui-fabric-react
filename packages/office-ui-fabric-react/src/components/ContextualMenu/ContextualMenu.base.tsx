@@ -219,6 +219,27 @@ function getSubMenuRenderFunction(props: IContextualMenuProps) {
     : onRenderSubMenu;
 }
 
+interface IContextualMenuSeparatorProps {
+  index: number;
+  classNames: IMenuItemClassNames; // tslint:disable-line:deprecation
+  top?: boolean;
+  fromSection?: boolean;
+  children?: React.ReactNode;
+}
+
+const ContextualMenuSeparator: React.FunctionComponent<IContextualMenuSeparatorProps> = ({
+  index,
+  classNames,
+  top,
+  fromSection,
+}: IContextualMenuSeparatorProps) => {
+  if (fromSection || index > 0) {
+    return <li role="separator" className={classNames.divider} aria-hidden="true" />;
+  }
+  return null;
+};
+ContextualMenuSeparator.displayName = 'ContextualMenuSeparator';
+
 class ContextualMenuBaseClass extends React.Component<
   IContextualMenuProps & {
     domRef: (ref: HTMLDivElement | null) => void;
@@ -657,10 +678,14 @@ class ContextualMenuBaseClass extends React.Component<
     }
     switch (item.itemType) {
       case ContextualMenuItemType.Divider:
-        renderedItems.push(this._renderSeparator(index, itemClassNames));
+        renderedItems.push(
+          <ContextualMenuSeparator key={`separator-${index}`} index={index} classNames={itemClassNames} />,
+        );
         break;
       case ContextualMenuItemType.Header:
-        renderedItems.push(this._renderSeparator(index, itemClassNames));
+        renderedItems.push(
+          <ContextualMenuSeparator key={`separator-${index}`} index={index} classNames={itemClassNames} />,
+        );
         const headerItem = this._renderHeaderMenuItem(item, itemClassNames, index, hasCheckmarks, hasIcons);
         renderedItems.push(this._renderListItem(headerItem, item.key || index, itemClassNames, item.title));
         break;
@@ -720,7 +745,15 @@ class ContextualMenuBaseClass extends React.Component<
         <li role="presentation" key={sectionProps.key || sectionItem.key || `section-${index}`}>
           <div {...groupProps}>
             <ul className={this._classNames.list}>
-              {sectionProps.topDivider && this._renderSeparator(index, menuClassNames, true, true)}
+              {sectionProps.topDivider && (
+                <ContextualMenuSeparator
+                  key={`separator-${index}-top`}
+                  index={index}
+                  classNames={menuClassNames}
+                  top={true}
+                  fromSection={true}
+                />
+              )}
               {headerItem &&
                 this._renderListItem(headerItem, sectionItem.key || index, menuClassNames, sectionItem.title)}
               {sectionProps.items.map((contextualMenuItem, itemsIndex) =>
@@ -733,7 +766,15 @@ class ContextualMenuBaseClass extends React.Component<
                   hasIcons,
                 }),
               )}
-              {sectionProps.bottomDivider && this._renderSeparator(index, menuClassNames, false, true)}
+              {sectionProps.bottomDivider && (
+                <ContextualMenuSeparator
+                  key={`separator-${index}-bottom`}
+                  index={index}
+                  classNames={menuClassNames}
+                  top={false}
+                  fromSection={true}
+                />
+              )}
             </ul>
           </div>
         </li>
@@ -752,25 +793,6 @@ class ContextualMenuBaseClass extends React.Component<
         {content}
       </li>
     );
-  }
-
-  private _renderSeparator(
-    index: number,
-    classNames: IMenuItemClassNames, // tslint:disable-line:deprecation
-    top?: boolean,
-    fromSection?: boolean,
-  ): React.ReactNode {
-    if (fromSection || index > 0) {
-      return (
-        <li
-          role="separator"
-          key={'separator-' + index + (top === undefined ? '' : top ? '-top' : '-bottom')}
-          className={classNames.divider}
-          aria-hidden="true"
-        />
-      );
-    }
-    return null;
   }
 
   private _renderNormalItem(
