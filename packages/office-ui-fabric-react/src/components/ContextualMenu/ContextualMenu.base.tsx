@@ -204,6 +204,7 @@ export const ContextualMenuBase = React.forwardRef(
     );
   },
 );
+ContextualMenuBase.displayName = 'ContextualMenuBase';
 
 class ContextualMenuBaseClass extends React.Component<
   IContextualMenuProps & {
