@@ -58,6 +58,7 @@ import {
 } from './ContextualMenuItem.types';
 import { getItemStyles } from './ContextualMenu.classNames';
 import { useMergedRefs, useConst, useId } from '@uifabric/react-hooks';
+import { getPropsWithDefaults } from '@uifabric/utilities';
 
 const getClassNames = classNamesFunction<IContextualMenuStyleProps, IContextualMenuStyles>();
 const getContextualMenuItemClassNames = classNamesFunction<IContextualMenuItemStyleProps, IContextualMenuItemStyles>();
@@ -474,7 +475,10 @@ class ContextualMenuBaseClass extends React.Component<
       return false;
     }
 
-    this._adjustedFocusZoneProps = { ...focusZoneProps, direction: this._getFocusZoneDirection() };
+    this._adjustedFocusZoneProps = getPropsWithDefaults(
+      { direction: FocusZoneDirection.vertical },
+      focusZoneProps ?? {},
+    );
 
     const hasCheckmarks = canAnyMenuItemsCheck(items);
     const submenuProps = this.state.expandedMenuItemKey && this.props.hidden !== true ? this._getSubmenuProps() : null;
@@ -611,17 +615,6 @@ class ContextualMenuBaseClass extends React.Component<
         this._previousActiveElement && this._previousActiveElement!.focus();
       }, 0);
     }
-  }
-
-  /**
-   * Gets the focusZoneDirection by using the arrowDirection if specified,
-   * the direction specificed in the focusZoneProps, or defaults to FocusZoneDirection.vertical
-   */
-  private _getFocusZoneDirection() {
-    const { focusZoneProps } = this.props;
-    return focusZoneProps && focusZoneProps.direction !== undefined
-      ? focusZoneProps.direction
-      : FocusZoneDirection.vertical;
   }
 
   private _onRenderMenuList = (
