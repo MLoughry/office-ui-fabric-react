@@ -18,6 +18,9 @@ export interface IUseBooleanCallbacks {
 export function useAsync(): Async;
 
 // @public
+export function useAsyncTimeout(async: Async): readonly [<TCallback extends (...args: unknown[]) => unknown>(callback: TCallback, timeout: number, ...params: Parameters<TCallback>) => void, () => void, () => boolean];
+
+// @public
 export function useBoolean(initialState: boolean): [boolean, IUseBooleanCallbacks];
 
 // @public

@@ -6,4 +6,5 @@ export * from './useId';
 export * from './useMergedRefs';
 export * from './useControllableValue';
 export * from './useAsync';
+export * from './useAsyncTimeout';
 export * from './useOnEvent';

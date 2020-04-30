@@ -49,6 +49,7 @@ import {
   ContextualMenuSplitButton,
   ContextualMenuButton,
   ContextualMenuAnchor,
+  IContextualMenuItemWrapperProps,
 } from './ContextualMenuItemWrapper/index';
 import { IProcessedStyleSet, concatStyleSetsWithProps } from '../../Styling';
 import {
@@ -57,7 +58,7 @@ import {
   IContextualMenuItemProps,
 } from './ContextualMenuItem.types';
 import { getItemStyles } from './ContextualMenu.classNames';
-import { useMergedRefs, useConst, useId } from '@uifabric/react-hooks';
+import { useMergedRefs, useConst, useId, useAsync, useAsyncTimeout } from '@uifabric/react-hooks';
 import { getPropsWithDefaults } from '@uifabric/utilities';
 
 const getClassNames = classNamesFunction<IContextualMenuStyleProps, IContextualMenuStyles>();
@@ -187,6 +188,449 @@ function useShowHideHandlers(props: IContextualMenuProps, targetWindowRef: React
   }, [!!props.hidden]);
 }
 
+function useShouldUpdateFocusOnMouseMove({ delayUpdateFocusOnHover, hidden }: IContextualMenuProps) {
+  const shouldUpdateFocusOnMouseEvent = React.useRef<boolean>(!delayUpdateFocusOnHover);
+  const gotMouseMove = React.useRef<boolean>(false);
+
+  React.useEffect(() => {
+    shouldUpdateFocusOnMouseEvent.current = !delayUpdateFocusOnHover;
+    gotMouseMove.current = !delayUpdateFocusOnHover && gotMouseMove.current;
+  }, [delayUpdateFocusOnHover]);
+
+  React.useEffect(() => {
+    shouldUpdateFocusOnMouseEvent.current = false;
+    gotMouseMove.current = hidden ? !delayUpdateFocusOnHover : false;
+  }, [hidden]);
+
+  const onMenuFocusCapture = () => {
+    if (delayUpdateFocusOnHover) {
+      shouldUpdateFocusOnMouseEvent.current = true;
+    }
+  };
+
+  return [shouldUpdateFocusOnMouseEvent, gotMouseMove, onMenuFocusCapture] as const;
+}
+
+function useScrollTracker(async: Async) {
+  const isScrollIdle = React.useRef<boolean>(true);
+  const scrollIdleTimeoutId = React.useRef<number | undefined>();
+  const [setScrollTimeout, , isScrollTimeoutPending] = useAsyncTimeout(async);
+  const [setEnterTimeout, , isEnterTimeoutActive] = useAsyncTimeout(async);
+
+  /**
+   * Scroll handler for the callout to make sure the mouse events
+   * for updating focus are not interacting during scroll
+   */
+  const onScroll = () => {
+    if (isScrollIdle.current || !isScrollTimeoutPending()) {
+      isScrollIdle.current = false;
+    }
+
+    scrollIdleTimeoutId.current = setScrollTimeout(() => (isScrollIdle.current = true), NavigationIdleDelay);
+  };
+
+  return [isScrollIdle, onScroll] as const;
+}
+
+function useIsMounted() {
+  const isMounted = React.useRef(false);
+
+  React.useEffect(() => {
+    isMounted.current = false;
+    return () => {
+      isMounted.current = true;
+    };
+  }, []);
+
+  return isMounted;
+}
+
+function useFocusHandler(props: IContextualMenuProps, targetWindowRef: React.RefObject<Window | undefined>) {
+  const shouldFocusPreviousElementOnUnmount = React.useRef<boolean>(false);
+  const previousActiveElement = React.useRef<HTMLElement | null>(null);
+
+  // Using useLayoutEffect to capture the existing focus before changes are flushed and focus changes
+  React.useLayoutEffect(() => {
+    if (!props.hidden) {
+      previousActiveElement.current = targetWindowRef.current
+        ? (targetWindowRef.current.document.activeElement as HTMLElement)
+        : null;
+      shouldFocusPreviousElementOnUnmount.current = false;
+    } else if (shouldFocusPreviousElementOnUnmount.current && previousActiveElement.current) {
+      // This slight delay is required so that we can unwind the stack, const react try to mess with focus, and then
+      // apply the correct focus. Without the setTimeout, we end up focusing the correct thing, and then React wants
+      // to reset the focus back to the thing it thinks should have been focused.
+      // Note: Cannot be replaced by this._async.setTimout because those will be removed by the time this is called.
+      setTimeout(() => {
+        previousActiveElement.current && previousActiveElement.current.focus();
+      }, 0);
+    }
+  }, [props.hidden]);
+
+  const setShouldFocusPreviousElementOnUnmount = () => {
+    shouldFocusPreviousElementOnUnmount.current = true;
+  };
+
+  return setShouldFocusPreviousElementOnUnmount;
+}
+
+function useMouseHandlers(
+  props: IContextualMenuProps,
+  host: React.RefObject<HTMLDivElement | null>,
+  targetWindow: React.RefObject<Window | undefined>,
+) {
+  const async = useAsync();
+  const [setSubMenuTimeout, clearSubMenuTimeout, isSubMenuTimeoutActive] = useAsyncTimeout(async);
+  const [isScrollIdle, onScroll] = useScrollTracker(async);
+  const [shouldUpdateFocusOnMouseEvent, gotMouseMove, onMenuFocusCapture] = useShouldUpdateFocusOnMouseMove(props);
+  const [expandedByMouseClick, setExpandedByMouseClick] = React.useState(false);
+  const [expandedMenuItemKey, setExpandedMenuItemKey] = React.useState<string | undefined>();
+  const [submenuTarget, setSubmenuTarget] = React.useState<HTMLElement | undefined>();
+  const [subMenuId, setSubMenuId] = React.useState<string | undefined>();
+  const isMounted = useIsMounted();
+  const setShouldFocusPreviousElementOnUnmount = useFocusHandler(props, targetWindow);
+  /** True if the most recent keydown event was for alt (option) or meta (command). */
+  const lastKeyDownWasAltOrMeta = React.useRef<boolean>(false);
+
+  React.useEffect(() => {
+    if (props.hidden) {
+      // We need to dismiss any submenu related state properties,
+      // so that when the menu is shown again, the submenu is collapsed
+      setExpandedByMouseClick(false);
+      setExpandedMenuItemKey(undefined);
+      setSubmenuTarget(undefined);
+    }
+  }, [props.hidden]);
+
+  const shouldIgnoreMouseEvent = () => !isScrollIdle.current || !gotMouseMove.current;
+
+  /**
+   * Checks if the submenu should be closed
+   */
+  const shouldCloseSubMenu = (ev: React.KeyboardEvent<HTMLElement>): boolean => {
+    const submenuCloseKey = getRTL(props.theme) ? KeyCodes.right : KeyCodes.left;
+
+    if (ev.which !== submenuCloseKey || !props.isSubMenu) {
+      return false;
+    }
+
+    return (
+      !props.focusZoneProps ||
+      props.focusZoneProps.direction === FocusZoneDirection.vertical ||
+      (!!props.focusZoneProps?.checkForNoWrap && !shouldWrapFocus(ev.target as HTMLElement, 'data-no-horizontal-wrap'))
+    );
+  };
+
+  const executeItemClick = (
+    item: IContextualMenuItem,
+    ev: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
+  ): void => {
+    if (item.disabled || item.isDisabled) {
+      return;
+    }
+
+    let dismiss = false;
+    if (item.onClick) {
+      dismiss = !!item.onClick(ev, item);
+    } else if (props.onItemClick) {
+      dismiss = !!props.onItemClick(ev, item);
+    }
+
+    (dismiss || !ev.defaultPrevented) && props.onDismiss?.(ev, true);
+  };
+
+  /**
+   * Calls `shouldHandleKey` to determine whether the keyboard event should be handled;
+   * if so, stops event propagation and dismisses menu(s).
+   * @param ev - The keyboard event.
+   * @param shouldHandleKey - Returns whether we should handle this keyboard event.
+   * @param dismissAllMenus - If true, dismiss all menus. Otherwise, dismiss only the current menu.
+   * Only does anything if `shouldHandleKey` returns true.
+   * @returns Whether the event was handled.
+   */
+  const keyHandler = (
+    ev: React.KeyboardEvent<HTMLElement>,
+    shouldHandleKey: (ev: React.KeyboardEvent<HTMLElement>) => boolean,
+    dismissAllMenus?: boolean,
+  ): boolean => {
+    let handled = false;
+
+    if (shouldHandleKey(ev)) {
+      setShouldFocusPreviousElementOnUnmount();
+      props.onDismiss?.(ev, dismissAllMenus);
+      ev.preventDefault();
+      ev.stopPropagation();
+      handled = true;
+    }
+
+    return handled;
+  };
+
+  const onItemSubMenuExpand = (item: IContextualMenuItem, target: HTMLElement): void => {
+    if (expandedMenuItemKey !== item.key) {
+      if (expandedMenuItemKey) {
+        onSubMenuDismiss();
+      }
+
+      // Focus the target to ensure when we close it, we're focusing on the correct element.
+      target.focus();
+      setExpandedMenuItemKey(item.key);
+      setSubmenuTarget(target);
+    }
+  };
+
+  const shouldHandleKeyDown = (ev: React.KeyboardEvent<HTMLElement>) => {
+    return (
+      ev.which === KeyCodes.escape || shouldCloseSubMenu(ev) || (ev.which === KeyCodes.up && (ev.altKey || ev.metaKey))
+    );
+  };
+
+  const onKeyDown = (ev: React.KeyboardEvent<HTMLElement>): boolean => {
+    // Take note if we are processing an alt (option) or meta (command) keydown.
+    // See comment in _shouldHandleKeyUp for reasoning.
+    lastKeyDownWasAltOrMeta.current = isAltOrMeta(ev);
+
+    // On Mac, pressing escape dismisses all levels of native context menus
+    const dismissAllMenus = ev.which === KeyCodes.escape && (isMac() || isIOS());
+
+    return keyHandler(ev, shouldHandleKeyDown, dismissAllMenus);
+  };
+
+  const onMenuKeyDown = (ev: React.KeyboardEvent<HTMLElement>) => {
+    // Mark as handled if onKeyDown returns true (for handling collapse cases)
+    // or if we are attempting to expand a submenu
+    const handled = onKeyDown(ev);
+
+    if (handled || !host.current) {
+      return;
+    }
+
+    // If we have a modifier key being pressed, we do not want to move focus.
+    // Otherwise, handle up and down keys.
+    const hasModifier = !!(ev.altKey || ev.metaKey);
+    const isUp = ev.which === KeyCodes.up;
+    const isDown = ev.which === KeyCodes.down;
+    if (!hasModifier && (isUp || isDown)) {
+      const elementToFocus = isUp
+        ? getLastFocusable(host.current, host.current.lastChild as HTMLElement, true)
+        : getFirstFocusable(host.current, host.current.firstChild as HTMLElement, true);
+
+      if (elementToFocus) {
+        elementToFocus.focus();
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    }
+  };
+
+  /**
+   * We close the menu on key up only if ALL of the following are true:
+   * - Most recent key down was alt or meta (command)
+   * - The alt/meta key down was NOT followed by some other key (such as down/up arrow to
+   *   expand/collapse the menu)
+   * - We're not on a Mac (or iOS)
+   *
+   * This is because on Windows, pressing alt moves focus to the application menu bar or similar,
+   * closing any open context menus. There is not a similar behavior on Macs.
+   */
+  const shouldHandleKeyUp = (ev: React.KeyboardEvent<HTMLElement>) => {
+    const keyPressIsAltOrMetaAlone = lastKeyDownWasAltOrMeta.current && isAltOrMeta(ev);
+    lastKeyDownWasAltOrMeta.current = false;
+    return !!keyPressIsAltOrMetaAlone && !(isIOS() || isMac());
+  };
+
+  const onKeyUp = (ev: React.KeyboardEvent<HTMLElement>): boolean => {
+    return keyHandler(ev, shouldHandleKeyUp, true /* dismissAllMenus */);
+  };
+
+  /**
+   * This function is called ASYNCHRONOUSLY, and so there is a chance it is called
+   * after the component is unmounted. The isMounted ref is added to prevent
+   * from calling setState() after unmount. Do NOT copy this pattern in synchronous
+   * code.
+   */
+  const onSubMenuDismiss = (ev?: any, dismissAll?: boolean): void => {
+    if (dismissAll) {
+      props.onDismiss?.(ev, dismissAll);
+    } else if (isMounted.current) {
+      setExpandedMenuItemKey(undefined);
+      setSubmenuTarget(undefined);
+    }
+  };
+
+  const onAnchorClick = (item: IContextualMenuItem, ev: React.MouseEvent<HTMLElement>) => {
+    executeItemClick(item, ev);
+    ev.stopPropagation();
+  };
+
+  /**
+   * Handles updating focus when mouseEnter or mouseMove fire.
+   * As part of updating focus, This function will also update
+   * the expand/collapse state accordingly.
+   */
+  const updateFocusOnMouseEvent = (
+    item: IContextualMenuItem,
+    ev: React.MouseEvent<HTMLElement>,
+    target?: HTMLElement,
+  ) => {
+    const targetElement = target ? target : (ev.currentTarget as HTMLElement);
+    const { subMenuHoverDelay: timeoutDuration = NavigationIdleDelay } = this.props;
+
+    if (item.key === expandedMenuItemKey) {
+      return;
+    }
+
+    clearSubMenuTimeout();
+
+    // If the menu is not expanded we can update focus without any delay
+    if (expandedMenuItemKey === undefined) {
+      targetElement.focus();
+    }
+
+    // Delay updating expanding/dismissing the submenu
+    // and only set focus if we have not already done so
+    if (hasSubmenu(item)) {
+      ev.stopPropagation();
+      setSubMenuTimeout(() => {
+        targetElement.focus();
+        setExpandedByMouseClick(true);
+        onItemSubMenuExpand(item, targetElement);
+      }, timeoutDuration);
+    } else {
+      setSubMenuTimeout(() => {
+        onSubMenuDismiss(ev);
+        targetElement.focus();
+      }, timeoutDuration);
+    }
+  };
+
+  const onItemMouseMove = (item: IContextualMenuItem, ev: React.MouseEvent<HTMLElement>, target: HTMLElement) => {
+    const targetElement = ev.currentTarget as HTMLElement;
+
+    // Always do this check to make sure we record a mouseMove if needed (even if we are timed out)
+    if (shouldUpdateFocusOnMouseEvent.current) {
+      gotMouseMove.current = true;
+    } else {
+      return;
+    }
+
+    if (
+      !isScrollIdle.current ||
+      isSubMenuTimeoutActive() ||
+      targetElement === (targetWindow.current?.document?.activeElement as HTMLElement)
+    ) {
+      return;
+    }
+
+    updateFocusOnMouseEvent(item, ev, target);
+  };
+
+  const onItemMouseLeave = (item: IContextualMenuItem, ev: React.MouseEvent<HTMLElement>): void => {
+    if (shouldIgnoreMouseEvent()) {
+      return;
+    }
+
+    clearSubMenuTimeout();
+
+    if (expandedMenuItemKey !== undefined) {
+      return;
+    }
+
+    /**
+     * IE11 focus() method forces parents to scroll to top of element.
+     * Edge and IE expose a setActive() function for focusable divs that
+     * sets the page focus but does not scroll the parent element.
+     */
+    if ('setActive' in host.current!) {
+      try {
+        (host.current as any).setActive();
+      } catch (e) {
+        /* no-op */
+      }
+    } else {
+      host.current!.focus();
+    }
+  };
+
+  const onItemMouseEnterBase = (
+    item: IContextualMenuItem,
+    ev: React.MouseEvent<HTMLElement>,
+    target?: HTMLElement,
+  ): void => {
+    if (shouldIgnoreMouseEvent()) {
+      return;
+    }
+
+    updateFocusOnMouseEvent(item, ev, target);
+  };
+
+  const onItemClick = (
+    item: IContextualMenuItem,
+    ev: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
+    target: HTMLElement = ev.currentTarget,
+  ): void => {
+    const items = getSubmenuItems(item);
+
+    // Cancel a async menu item hover timeout action from being taken and instead
+    // just trigger the click event instead.
+    clearSubMenuTimeout();
+
+    if (!hasSubmenu(item) && (!items || !items.length)) {
+      // This is an item without a menu. Click it.
+      executeItemClick(item, ev);
+    } else {
+      if (item.key !== expandedMenuItemKey) {
+        // This has a collapsed sub menu. Expand it.
+        // When Edge + Narrator are used together (regardless of if the button is in a form or not), pressing
+        // "Enter" fires this method and not _onMenuKeyDown. Checking ev.nativeEvent.detail differentiates
+        // between a real click event and a keypress event (detail should be the number of mouse clicks).
+        // ...Plot twist! For a real click event in IE 11, detail is always 0 (Edge sets it properly to 1).
+        // So we also check the pointerType property, which both Edge and IE set to "mouse" for real clicks
+        // and "" for pressing "Enter" with Narrator on.
+        setExpandedByMouseClick(
+          ev.nativeEvent.detail !== 0 || (ev.nativeEvent as PointerEvent).pointerType === 'mouse',
+        );
+        onItemSubMenuExpand(item, target);
+      }
+    }
+
+    ev.stopPropagation();
+    ev.preventDefault();
+  };
+
+  const onItemKeyDown = (item: IContextualMenuItem, ev: React.KeyboardEvent<HTMLElement>): void => {
+    const openKey = getRTL(props.theme) ? KeyCodes.left : KeyCodes.right;
+
+    if (
+      !item.disabled &&
+      (ev.which === openKey || ev.which === KeyCodes.enter || (ev.which === KeyCodes.down && (ev.altKey || ev.metaKey)))
+    ) {
+      setExpandedByMouseClick(false);
+      onItemSubMenuExpand(item, ev.currentTarget as HTMLElement);
+      ev.preventDefault();
+    }
+  };
+
+  const getSubMenuId = (item: IContextualMenuItem): string | undefined => {
+    return item.subMenuProps?.id ?? subMenuId;
+  };
+
+  return {
+    expandedMenuItemKey,
+    onItemMouseEnterBase,
+    onItemMouseLeave,
+    onItemMouseMove,
+    onItemClick,
+    onItemKeyDown,
+    onItemSubMenuExpand,
+    onSubMenuDismiss,
+    clearSubMenuTimeout,
+    executeItemClick,
+    onAnchorClick,
+    getSubMenuId,
+  };
+}
+
 export const ContextualMenuBase = React.forwardRef(
   (props: IContextualMenuProps, forwardedRef: React.Ref<HTMLDivElement>) => {
     const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -196,6 +640,186 @@ export const ContextualMenuBase = React.forwardRef(
 
     const [target, targetWindowRef] = useTarget(props, rootRef);
     useShowHideHandlers(props, targetWindowRef);
+    const {
+      expandedMenuItemKey,
+      onItemMouseEnterBase,
+      onItemMouseLeave,
+      onItemMouseMove,
+      onItemClick,
+      onItemSubMenuExpand,
+      onSubMenuDismiss,
+      onItemKeyDown,
+      clearSubMenuTimeout,
+      executeItemClick,
+      onAnchorClick,
+      getSubMenuId,
+    } = useMouseHandlers(props, rootRef, targetWindowRef);
+
+    React.useImperativeHandle(
+      props.componentRef,
+      () => ({
+        dismiss(ev?: any, dismissAll?: boolean) {
+          props.onDismiss?.(ev, dismissAll);
+        },
+      }),
+      [props.onDismiss],
+    );
+
+    const renderSplitButton = (
+      item: IContextualMenuItem,
+      // tslint:disable-next-line:deprecation
+      classNames: IMenuItemClassNames,
+      index: number,
+      focusableElementIndex: number,
+      totalItemCount: number,
+      hasCheckmarks?: boolean,
+      hasIcons?: boolean,
+    ): JSX.Element => {
+      return (
+        <ContextualMenuSplitButton
+          {...getContextualMenuItemWrapperProps(
+            item,
+            classNames,
+            index,
+            focusableElementIndex,
+            totalItemCount,
+            hasCheckmarks,
+            hasIcons,
+          )}
+          onItemClick={onItemClick}
+          onItemClickBase={onItemClick}
+        />
+      );
+    };
+
+    const renderAnchorMenuItem = (
+      item: IContextualMenuItem,
+      // tslint:disable-next-line:deprecation
+      classNames: IMenuItemClassNames,
+      index: number,
+      focusableElementIndex: number,
+      totalItemCount: number,
+      hasCheckmarks: boolean,
+      hasIcons: boolean,
+    ): React.ReactNode => {
+      return (
+        <ContextualMenuAnchor
+          {...getContextualMenuItemWrapperProps(
+            item,
+            classNames,
+            index,
+            focusableElementIndex,
+            totalItemCount,
+            hasCheckmarks,
+            hasIcons,
+          )}
+          getSubMenuId={getSubMenuId}
+          onItemClick={onAnchorClick}
+        />
+      );
+    };
+
+    const renderButtonItem = (
+      item: IContextualMenuItem,
+      // tslint:disable-next-line:deprecation
+      classNames: IMenuItemClassNames,
+      index: number,
+      focusableElementIndex: number,
+      totalItemCount: number,
+      hasCheckmarks?: boolean,
+      hasIcons?: boolean,
+    ) => {
+      return (
+        <ContextualMenuButton
+          {...getContextualMenuItemWrapperProps(
+            item,
+            classNames,
+            index,
+            focusableElementIndex,
+            totalItemCount,
+            hasCheckmarks,
+            hasIcons,
+          )}
+          getSubMenuId={getSubMenuId}
+          onItemClick={onItemClick}
+          onItemClickBase={onItemClick}
+        />
+      );
+    };
+
+    const getContextualMenuItemWrapperProps = (
+      item: IContextualMenuItem,
+      // tslint:disable-next-line:deprecation
+      classNames: IMenuItemClassNames,
+      index: number,
+      focusableElementIndex: number,
+      totalItemCount: number,
+      hasCheckmarks?: boolean,
+      hasIcons?: boolean,
+    ) => {
+      return {
+        classNames,
+        contextualMenuItemAs: props.contextualMenuItemAs,
+        dismissMenu: props.onDismiss,
+        dismissSubMenu: onSubMenuDismiss,
+        executeItemClick,
+        expandedMenuItemKey,
+        focusableElementIndex,
+        hasCheckmarks,
+        hasIcons,
+        index,
+        item,
+        onItemKeyDown,
+        onItemMouseDown: item.onMouseDown,
+        onItemMouseEnter: onItemMouseEnterBase,
+        onItemMouseLeave,
+        onItemMouseMove,
+        openSubMenu: onItemSubMenuExpand,
+        totalItemCount,
+      };
+    };
+
+    const renderNormalItem = (
+      item: IContextualMenuItem,
+      classNames: IMenuItemClassNames, // tslint:disable-line:deprecation
+      index: number,
+      focusableElementIndex: number,
+      totalItemCount: number,
+      hasCheckmarks: boolean,
+      hasIcons: boolean,
+    ): React.ReactNode => {
+      if (item.onRender) {
+        return item.onRender(
+          { 'aria-posinset': focusableElementIndex + 1, 'aria-setsize': totalItemCount, ...item },
+          (ev, dismissAll) => props.onDismiss?.(ev, dismissAll),
+        );
+      }
+      if (item.href) {
+        return renderAnchorMenuItem(
+          item,
+          classNames,
+          index,
+          focusableElementIndex,
+          totalItemCount,
+          hasCheckmarks,
+          hasIcons,
+        );
+      }
+
+      if (item.split && hasSubmenu(item)) {
+        return renderSplitButton(
+          item,
+          classNames,
+          index,
+          focusableElementIndex,
+          totalItemCount,
+          hasCheckmarks,
+          hasIcons,
+        );
+      }
+
+      return renderButtonItem(item, classNames, index, focusableElementIndex, totalItemCount, hasCheckmarks, hasIcons);
+    };
 
     return (
       <ContextualMenuBaseClass
@@ -306,19 +930,7 @@ class ContextualMenuBaseClass extends React.Component<
     beakWidth: 16,
   };
 
-  private _async: Async;
   private _id: string;
-  private _host: HTMLElement;
-  private _previousActiveElement: HTMLElement | null;
-  private _isFocusingPreviousElement: boolean;
-  private _enterTimerId: number | undefined;
-  private _isScrollIdle: boolean;
-  private _scrollIdleTimeoutId: number | undefined;
-  /** True if the most recent keydown event was for alt (option) or meta (command). */
-  private _lastKeyDownWasAltOrMeta: boolean | undefined;
-  private _shouldUpdateFocusOnMouseEvent: boolean;
-  private _gotMouseMove: boolean;
-  private _mounted = false;
 
   private _adjustedFocusZoneProps: IFocusZoneProps;
 
@@ -328,31 +940,16 @@ class ContextualMenuBaseClass extends React.Component<
   constructor(props: any) {
     super(props);
 
-    this._async = new Async(this);
-    initializeComponentRef(this);
-
     warnDeprecations(COMPONENT_NAME, props, {
       getMenuClassNames: 'styles',
     });
+    this._id = props.id;
 
     this.state = {
       contextualMenuItems: undefined,
       subMenuId: getId('ContextualMenu'),
     };
-
-    this._isFocusingPreviousElement = false;
-    this._isScrollIdle = true;
-    this._shouldUpdateFocusOnMouseEvent = !this.props.delayUpdateFocusOnHover;
-    this._gotMouseMove = false;
   }
-
-  public dismiss = (ev?: any, dismissAll?: boolean) => {
-    const { onDismiss } = this.props;
-
-    if (onDismiss) {
-      onDismiss(ev, dismissAll);
-    }
-  };
 
   public shouldComponentUpdate(newProps: IContextualMenuProps, newState: IContextualMenuState): boolean {
     if (!newProps.shouldUpdateWhenHidden && this.props.hidden && newProps.hidden) {
@@ -361,58 +958,6 @@ class ContextualMenuBaseClass extends React.Component<
     }
 
     return !shallowCompare(this.props, newProps) || !shallowCompare(this.state, newState);
-  }
-
-  // tslint:disable-next-line function-name
-  public UNSAFE_componentWillUpdate(newProps: IContextualMenuProps): void {
-    if (!!newProps.hidden !== !!this.props.hidden) {
-      if (!!newProps.hidden) {
-        this._onMenuClosed();
-      } else {
-        this._onMenuOpened();
-        this._previousActiveElement = this.props._targetWindow.current
-          ? (this.props._targetWindow.current.document.activeElement as HTMLElement)
-          : null;
-      }
-    }
-    if (newProps.delayUpdateFocusOnHover !== this.props.delayUpdateFocusOnHover) {
-      // update shouldUpdateFocusOnMouseEvent to follow what was passed in
-      this._shouldUpdateFocusOnMouseEvent = !newProps.delayUpdateFocusOnHover;
-
-      // If shouldUpdateFocusOnMouseEvent is false, we need to reset gotMouseMove to false
-      this._gotMouseMove = this._shouldUpdateFocusOnMouseEvent && this._gotMouseMove;
-    }
-  }
-
-  // Invoked once, both on the client and server, immediately before the initial rendering occurs.
-  // tslint:disable-next-line function-name
-  public UNSAFE_componentWillMount() {
-    if (!this.props.hidden) {
-      this._previousActiveElement = this.props._targetWindow.current
-        ? (this.props._targetWindow.current.document.activeElement as HTMLElement)
-        : null;
-    }
-  }
-
-  // Invoked once, only on the client (not on the server), immediately after the initial rendering occurs.
-  public componentDidMount(): void {
-    if (!this.props.hidden) {
-      this._onMenuOpened();
-    }
-
-    this._mounted = true;
-  }
-
-  // Invoked immediately before a component is unmounted from the DOM.
-  public componentWillUnmount() {
-    this._tryFocusPreviousActiveElement();
-
-    if (this.props.onMenuDismissed) {
-      this.props.onMenuDismissed(this.props);
-    }
-
-    this._async.dispose();
-    this._mounted = false;
   }
 
   public render(): JSX.Element | null {
@@ -586,37 +1131,6 @@ class ContextualMenuBaseClass extends React.Component<
     }
   }
 
-  private _onMenuOpened() {
-    this._shouldUpdateFocusOnMouseEvent = !this.props.delayUpdateFocusOnHover;
-    this._gotMouseMove = false;
-  }
-
-  private _onMenuClosed() {
-    this._tryFocusPreviousActiveElement();
-
-    this._shouldUpdateFocusOnMouseEvent = !this.props.delayUpdateFocusOnHover;
-
-    // We need to dismiss any submenu related state properties,
-    // so that when the menu is shown again, the submenu is collapsed
-    this.setState({
-      expandedByMouseClick: undefined,
-      expandedMenuItemKey: undefined,
-      submenuTarget: undefined,
-    });
-  }
-
-  private _tryFocusPreviousActiveElement() {
-    if (this._isFocusingPreviousElement && this._previousActiveElement) {
-      // This slight delay is required so that we can unwind the stack, const react try to mess with focus, and then
-      // apply the correct focus. Without the setTimeout, we end up focusing the correct thing, and then React wants
-      // to reset the focus back to the thing it thinks should have been focused.
-      // Note: Cannot be replaced by this._async.setTimout because those will be removed by the time this is called.
-      setTimeout(() => {
-        this._previousActiveElement && this._previousActiveElement!.focus();
-      }, 0);
-    }
-  }
-
   private _onRenderMenuList = (
     menuListProps: IContextualMenuListProps,
     defaultRender?: IRenderFunction<IContextualMenuListProps>,
@@ -731,7 +1245,14 @@ class ContextualMenuBaseClass extends React.Component<
             menuClassNames={this._classNames}
           />
         );
-        renderedItems.push(this._renderListItem(headerItem, item.key || index, itemClassNames, item.title));
+        renderedItems.push(
+          <ContextualMenuListItem
+            content={headerItem}
+            key={item.key || index}
+            classNames={itemClassNames}
+            title={item.title}
+          />,
+        );
         break;
       case ContextualMenuItemType.Section:
         renderedItems.push(this._renderSectionItem(item, itemClassNames, index, hasCheckmarks, hasIcons));
@@ -746,7 +1267,14 @@ class ContextualMenuBaseClass extends React.Component<
           hasCheckmarks,
           hasIcons,
         );
-        renderedItems.push(this._renderListItem(menuItem, item.key || index, itemClassNames, item.title));
+        renderedItems.push(
+          <ContextualMenuListItem
+            content={menuItem}
+            key={item.key || index}
+            classNames={itemClassNames}
+            title={item.title}
+          />,
+        );
         break;
     }
 
@@ -810,8 +1338,14 @@ class ContextualMenuBaseClass extends React.Component<
                   fromSection={true}
                 />
               )}
-              {headerItem &&
-                this._renderListItem(headerItem, sectionItem.key || index, menuClassNames, sectionItem.title)}
+              {headerItem && (
+                <ContextualMenuListItem
+                  content={headerItem}
+                  key={sectionItem.key || index}
+                  classNames={menuClassNames}
+                  title={sectionItem.title}
+                />
+              )}
               {sectionProps.items.map((contextualMenuItem, itemsIndex) =>
                 this._renderMenuItem({
                   ...contextualMenuItem,
@@ -837,536 +1371,6 @@ class ContextualMenuBaseClass extends React.Component<
       );
     }
   }
-
-  private _renderListItem(
-    content: React.ReactNode,
-    key: string | number,
-    classNames: IMenuItemClassNames, // tslint:disable-line:deprecation
-    title?: string,
-  ) {
-    return (
-      <li role="presentation" title={title} key={key} className={classNames.item}>
-        {content}
-      </li>
-    );
-  }
-
-  private _renderNormalItem(
-    item: IContextualMenuItem,
-    classNames: IMenuItemClassNames, // tslint:disable-line:deprecation
-    index: number,
-    focusableElementIndex: number,
-    totalItemCount: number,
-    hasCheckmarks: boolean,
-    hasIcons: boolean,
-  ): React.ReactNode {
-    if (item.onRender) {
-      return item.onRender(
-        { 'aria-posinset': focusableElementIndex + 1, 'aria-setsize': totalItemCount, ...item },
-        this.dismiss,
-      );
-    }
-    if (item.href) {
-      return this._renderAnchorMenuItem(
-        item,
-        classNames,
-        index,
-        focusableElementIndex,
-        totalItemCount,
-        hasCheckmarks,
-        hasIcons,
-      );
-    }
-
-    if (item.split && hasSubmenu(item)) {
-      return this._renderSplitButton(
-        item,
-        classNames,
-        index,
-        focusableElementIndex,
-        totalItemCount,
-        hasCheckmarks,
-        hasIcons,
-      );
-    }
-
-    return this._renderButtonItem(
-      item,
-      classNames,
-      index,
-      focusableElementIndex,
-      totalItemCount,
-      hasCheckmarks,
-      hasIcons,
-    );
-  }
-
-  private _renderAnchorMenuItem(
-    item: IContextualMenuItem,
-    // tslint:disable-next-line:deprecation
-    classNames: IMenuItemClassNames,
-    index: number,
-    focusableElementIndex: number,
-    totalItemCount: number,
-    hasCheckmarks: boolean,
-    hasIcons: boolean,
-  ): React.ReactNode {
-    const { contextualMenuItemAs } = this.props;
-    const { expandedMenuItemKey } = this.state;
-    return (
-      <ContextualMenuAnchor
-        item={item}
-        classNames={classNames}
-        index={index}
-        focusableElementIndex={focusableElementIndex}
-        totalItemCount={totalItemCount}
-        hasCheckmarks={hasCheckmarks}
-        hasIcons={hasIcons}
-        contextualMenuItemAs={contextualMenuItemAs}
-        onItemMouseEnter={this._onItemMouseEnterBase}
-        onItemMouseLeave={this._onMouseItemLeave}
-        onItemMouseMove={this._onItemMouseMoveBase}
-        onItemMouseDown={this._onItemMouseDown}
-        executeItemClick={this._executeItemClick}
-        onItemClick={this._onAnchorClick}
-        onItemKeyDown={this._onItemKeyDown}
-        getSubMenuId={this._getSubMenuId}
-        expandedMenuItemKey={expandedMenuItemKey}
-        openSubMenu={this._onItemSubMenuExpand}
-        dismissSubMenu={this._onSubMenuDismiss}
-        dismissMenu={this.dismiss}
-      />
-    );
-  }
-
-  private _renderButtonItem(
-    item: IContextualMenuItem,
-    // tslint:disable-next-line:deprecation
-    classNames: IMenuItemClassNames,
-    index: number,
-    focusableElementIndex: number,
-    totalItemCount: number,
-    hasCheckmarks?: boolean,
-    hasIcons?: boolean,
-  ) {
-    const { contextualMenuItemAs } = this.props;
-    const { expandedMenuItemKey } = this.state;
-
-    return (
-      <ContextualMenuButton
-        item={item}
-        classNames={classNames}
-        index={index}
-        focusableElementIndex={focusableElementIndex}
-        totalItemCount={totalItemCount}
-        hasCheckmarks={hasCheckmarks}
-        hasIcons={hasIcons}
-        contextualMenuItemAs={contextualMenuItemAs}
-        onItemMouseEnter={this._onItemMouseEnterBase}
-        onItemMouseLeave={this._onMouseItemLeave}
-        onItemMouseMove={this._onItemMouseMoveBase}
-        onItemMouseDown={this._onItemMouseDown}
-        executeItemClick={this._executeItemClick}
-        onItemClick={this._onItemClick}
-        onItemClickBase={this._onItemClickBase}
-        onItemKeyDown={this._onItemKeyDown}
-        getSubMenuId={this._getSubMenuId}
-        expandedMenuItemKey={expandedMenuItemKey}
-        openSubMenu={this._onItemSubMenuExpand}
-        dismissSubMenu={this._onSubMenuDismiss}
-        dismissMenu={this.dismiss}
-      />
-    );
-  }
-
-  private _renderSplitButton(
-    item: IContextualMenuItem,
-    // tslint:disable-next-line:deprecation
-    classNames: IMenuItemClassNames,
-    index: number,
-    focusableElementIndex: number,
-    totalItemCount: number,
-    hasCheckmarks?: boolean,
-    hasIcons?: boolean,
-  ): JSX.Element {
-    const { contextualMenuItemAs } = this.props;
-    const { expandedMenuItemKey } = this.state;
-
-    return (
-      <ContextualMenuSplitButton
-        item={item}
-        classNames={classNames}
-        index={index}
-        focusableElementIndex={focusableElementIndex}
-        totalItemCount={totalItemCount}
-        hasCheckmarks={hasCheckmarks}
-        hasIcons={hasIcons}
-        contextualMenuItemAs={contextualMenuItemAs}
-        onItemMouseEnter={this._onItemMouseEnterBase}
-        onItemMouseLeave={this._onMouseItemLeave}
-        onItemMouseMove={this._onItemMouseMoveBase}
-        onItemMouseDown={this._onItemMouseDown}
-        executeItemClick={this._executeItemClick}
-        onItemClick={this._onItemClick}
-        onItemClickBase={this._onItemClickBase}
-        onItemKeyDown={this._onItemKeyDown}
-        openSubMenu={this._onItemSubMenuExpand}
-        dismissSubMenu={this._onSubMenuDismiss}
-        dismissMenu={this.dismiss}
-        expandedMenuItemKey={expandedMenuItemKey}
-        onTap={this._onPointerAndTouchEvent}
-      />
-    );
-  }
-
-  private _onKeyDown = (ev: React.KeyboardEvent<HTMLElement>): boolean => {
-    // Take note if we are processing an alt (option) or meta (command) keydown.
-    // See comment in _shouldHandleKeyUp for reasoning.
-    this._lastKeyDownWasAltOrMeta = isAltOrMeta(ev);
-
-    // On Mac, pressing escape dismisses all levels of native context menus
-    const dismissAllMenus = ev.which === KeyCodes.escape && (isMac() || isIOS());
-
-    return this._keyHandler(ev, this._shouldHandleKeyDown, dismissAllMenus);
-  };
-
-  private _shouldHandleKeyDown = (ev: React.KeyboardEvent<HTMLElement>) => {
-    return (
-      ev.which === KeyCodes.escape ||
-      this._shouldCloseSubMenu(ev) ||
-      (ev.which === KeyCodes.up && (ev.altKey || ev.metaKey))
-    );
-  };
-
-  private _onMenuFocusCapture = (ev: React.FocusEvent<HTMLElement>) => {
-    if (this.props.delayUpdateFocusOnHover) {
-      this._shouldUpdateFocusOnMouseEvent = true;
-    }
-  };
-
-  private _onKeyUp = (ev: React.KeyboardEvent<HTMLElement>): boolean => {
-    return this._keyHandler(ev, this._shouldHandleKeyUp, true /* dismissAllMenus */);
-  };
-
-  /**
-   * We close the menu on key up only if ALL of the following are true:
-   * - Most recent key down was alt or meta (command)
-   * - The alt/meta key down was NOT followed by some other key (such as down/up arrow to
-   *   expand/collapse the menu)
-   * - We're not on a Mac (or iOS)
-   *
-   * This is because on Windows, pressing alt moves focus to the application menu bar or similar,
-   * closing any open context menus. There is not a similar behavior on Macs.
-   */
-  private _shouldHandleKeyUp = (ev: React.KeyboardEvent<HTMLElement>) => {
-    const keyPressIsAltOrMetaAlone = this._lastKeyDownWasAltOrMeta && isAltOrMeta(ev);
-    this._lastKeyDownWasAltOrMeta = false;
-    return !!keyPressIsAltOrMetaAlone && !(isIOS() || isMac());
-  };
-
-  /**
-   * Calls `shouldHandleKey` to determine whether the keyboard event should be handled;
-   * if so, stops event propagation and dismisses menu(s).
-   * @param ev - The keyboard event.
-   * @param shouldHandleKey - Returns whether we should handle this keyboard event.
-   * @param dismissAllMenus - If true, dismiss all menus. Otherwise, dismiss only the current menu.
-   * Only does anything if `shouldHandleKey` returns true.
-   * @returns Whether the event was handled.
-   */
-  private _keyHandler = (
-    ev: React.KeyboardEvent<HTMLElement>,
-    shouldHandleKey: (ev: React.KeyboardEvent<HTMLElement>) => boolean,
-    dismissAllMenus?: boolean,
-  ): boolean => {
-    let handled = false;
-
-    if (shouldHandleKey(ev)) {
-      this._isFocusingPreviousElement = true;
-      this.dismiss(ev, dismissAllMenus);
-      ev.preventDefault();
-      ev.stopPropagation();
-      handled = true;
-    }
-
-    return handled;
-  };
-
-  /**
-   * Checks if the submenu should be closed
-   */
-  private _shouldCloseSubMenu = (ev: React.KeyboardEvent<HTMLElement>): boolean => {
-    const submenuCloseKey = getRTL(this.props.theme) ? KeyCodes.right : KeyCodes.left;
-
-    if (ev.which !== submenuCloseKey || !this.props.isSubMenu) {
-      return false;
-    }
-
-    return (
-      this._adjustedFocusZoneProps.direction === FocusZoneDirection.vertical ||
-      (!!this._adjustedFocusZoneProps.checkForNoWrap &&
-        !shouldWrapFocus(ev.target as HTMLElement, 'data-no-horizontal-wrap'))
-    );
-  };
-
-  private _onMenuKeyDown = (ev: React.KeyboardEvent<HTMLElement>) => {
-    // Mark as handled if onKeyDown returns true (for handling collapse cases)
-    // or if we are attempting to expand a submenu
-    const handled = this._onKeyDown(ev);
-
-    if (handled || !this._host) {
-      return;
-    }
-
-    // If we have a modifier key being pressed, we do not want to move focus.
-    // Otherwise, handle up and down keys.
-    const hasModifier = !!(ev.altKey || ev.metaKey);
-    const isUp = ev.which === KeyCodes.up;
-    const isDown = ev.which === KeyCodes.down;
-    if (!hasModifier && (isUp || isDown)) {
-      const elementToFocus = isUp
-        ? getLastFocusable(this._host, this._host.lastChild as HTMLElement, true)
-        : getFirstFocusable(this._host, this._host.firstChild as HTMLElement, true);
-
-      if (elementToFocus) {
-        elementToFocus.focus();
-        ev.preventDefault();
-        ev.stopPropagation();
-      }
-    }
-  };
-
-  /**
-   * Scroll handler for the callout to make sure the mouse events
-   * for updating focus are not interacting during scroll
-   */
-  private _onScroll = (): void => {
-    if (!this._isScrollIdle && this._scrollIdleTimeoutId !== undefined) {
-      this._async.clearTimeout(this._scrollIdleTimeoutId);
-      this._scrollIdleTimeoutId = undefined;
-    } else {
-      this._isScrollIdle = false;
-    }
-
-    this._scrollIdleTimeoutId = this._async.setTimeout(() => {
-      this._isScrollIdle = true;
-    }, NavigationIdleDelay);
-  };
-
-  private _onItemMouseEnterBase = (item: any, ev: React.MouseEvent<HTMLElement>, target?: HTMLElement): void => {
-    if (this._shouldIgnoreMouseEvent()) {
-      return;
-    }
-
-    this._updateFocusOnMouseEvent(item, ev, target);
-  };
-
-  private _onItemMouseMoveBase = (item: any, ev: React.MouseEvent<HTMLElement>, target: HTMLElement): void => {
-    const targetElement = ev.currentTarget as HTMLElement;
-
-    // Always do this check to make sure we record a mouseMove if needed (even if we are timed out)
-    if (this._shouldUpdateFocusOnMouseEvent) {
-      this._gotMouseMove = true;
-    } else {
-      return;
-    }
-
-    if (
-      !this._isScrollIdle ||
-      this._enterTimerId !== undefined ||
-      targetElement === (this.props._targetWindow.current?.document?.activeElement as HTMLElement)
-    ) {
-      return;
-    }
-
-    this._updateFocusOnMouseEvent(item, ev, target);
-  };
-
-  private _shouldIgnoreMouseEvent(): boolean {
-    return !this._isScrollIdle || !this._gotMouseMove;
-  }
-
-  private _onMouseItemLeave = (item: any, ev: React.MouseEvent<HTMLElement>): void => {
-    if (this._shouldIgnoreMouseEvent()) {
-      return;
-    }
-
-    if (this._enterTimerId !== undefined) {
-      this._async.clearTimeout(this._enterTimerId);
-      this._enterTimerId = undefined;
-    }
-
-    if (this.state.expandedMenuItemKey !== undefined) {
-      return;
-    }
-
-    /**
-     * IE11 focus() method forces parents to scroll to top of element.
-     * Edge and IE expose a setActive() function for focusable divs that
-     * sets the page focus but does not scroll the parent element.
-     */
-    if ((this._host as any).setActive) {
-      try {
-        (this._host as any).setActive();
-      } catch (e) {
-        /* no-op */
-      }
-    } else {
-      this._host.focus();
-    }
-  };
-
-  /**
-   * Handles updating focus when mouseEnter or mouseMove fire.
-   * As part of updating focus, This function will also update
-   * the expand/collapse state accordingly.
-   */
-  private _updateFocusOnMouseEvent(item: IContextualMenuItem, ev: React.MouseEvent<HTMLElement>, target?: HTMLElement) {
-    const targetElement = target ? target : (ev.currentTarget as HTMLElement);
-    const { subMenuHoverDelay: timeoutDuration = NavigationIdleDelay } = this.props;
-
-    if (item.key === this.state.expandedMenuItemKey) {
-      return;
-    }
-
-    if (this._enterTimerId !== undefined) {
-      this._async.clearTimeout(this._enterTimerId);
-      this._enterTimerId = undefined;
-    }
-
-    // If the menu is not expanded we can update focus without any delay
-    if (this.state.expandedMenuItemKey === undefined) {
-      targetElement.focus();
-    }
-
-    // Delay updating expanding/dismissing the submenu
-    // and only set focus if we have not already done so
-    if (hasSubmenu(item)) {
-      ev.stopPropagation();
-      this._enterTimerId = this._async.setTimeout(() => {
-        targetElement.focus();
-        this.setState({
-          expandedByMouseClick: true,
-        });
-        this._onItemSubMenuExpand(item, targetElement);
-        this._enterTimerId = undefined;
-      }, timeoutDuration);
-    } else {
-      this._enterTimerId = this._async.setTimeout(() => {
-        this._onSubMenuDismiss(ev);
-        targetElement.focus();
-        this._enterTimerId = undefined;
-      }, timeoutDuration);
-    }
-  }
-
-  private _onItemMouseDown = (item: IContextualMenuItem, ev: React.MouseEvent<HTMLElement>): void => {
-    if (item.onMouseDown) {
-      item.onMouseDown(item, ev);
-    }
-  };
-
-  private _onItemClick = (
-    item: IContextualMenuItem,
-    ev: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
-  ): void => {
-    this._onItemClickBase(item, ev, ev.currentTarget as HTMLElement);
-  };
-
-  private _onItemClickBase = (
-    item: IContextualMenuItem,
-    ev: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
-    target: HTMLElement,
-  ): void => {
-    const items = getSubmenuItems(item);
-
-    // Cancel a async menu item hover timeout action from being taken and instead
-    // just trigger the click event instead.
-    this._cancelSubMenuTimer();
-
-    if (!hasSubmenu(item) && (!items || !items.length)) {
-      // This is an item without a menu. Click it.
-      this._executeItemClick(item, ev);
-    } else {
-      if (item.key !== this.state.expandedMenuItemKey) {
-        // This has a collapsed sub menu. Expand it.
-        this.setState({
-          // When Edge + Narrator are used together (regardless of if the button is in a form or not), pressing
-          // "Enter" fires this method and not _onMenuKeyDown. Checking ev.nativeEvent.detail differentiates
-          // between a real click event and a keypress event (detail should be the number of mouse clicks).
-          // ...Plot twist! For a real click event in IE 11, detail is always 0 (Edge sets it properly to 1).
-          // So we also check the pointerType property, which both Edge and IE set to "mouse" for real clicks
-          // and "" for pressing "Enter" with Narrator on.
-          expandedByMouseClick: ev.nativeEvent.detail !== 0 || (ev.nativeEvent as PointerEvent).pointerType === 'mouse',
-        });
-        this._onItemSubMenuExpand(item, target);
-      }
-    }
-
-    ev.stopPropagation();
-    ev.preventDefault();
-  };
-
-  private _onAnchorClick = (item: IContextualMenuItem, ev: React.MouseEvent<HTMLElement>) => {
-    this._executeItemClick(item, ev);
-    ev.stopPropagation();
-  };
-
-  private _executeItemClick = (
-    item: IContextualMenuItem,
-    ev: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
-  ): void => {
-    if (item.disabled || item.isDisabled) {
-      return;
-    }
-
-    let dismiss = false;
-    if (item.onClick) {
-      dismiss = !!item.onClick(ev, item);
-    } else if (this.props.onItemClick) {
-      dismiss = !!this.props.onItemClick(ev, item);
-    }
-
-    (dismiss || !ev.defaultPrevented) && this.dismiss(ev, true);
-  };
-
-  private _onItemKeyDown = (item: any, ev: React.KeyboardEvent<HTMLElement>): void => {
-    const openKey = getRTL(this.props.theme) ? KeyCodes.left : KeyCodes.right;
-
-    if (
-      !item.disabled &&
-      (ev.which === openKey || ev.which === KeyCodes.enter || (ev.which === KeyCodes.down && (ev.altKey || ev.metaKey)))
-    ) {
-      this.setState({
-        expandedByMouseClick: false,
-      });
-      this._onItemSubMenuExpand(item, ev.currentTarget as HTMLElement);
-      ev.preventDefault();
-    }
-  };
-
-  // Cancel a async menu item hover timeout action from being taken and instead
-  // do new upcoming behavior
-  private _cancelSubMenuTimer = () => {
-    if (this._enterTimerId !== undefined) {
-      this._async.clearTimeout(this._enterTimerId);
-      this._enterTimerId = undefined;
-    }
-  };
-
-  private _onItemSubMenuExpand = (item: IContextualMenuItem, target: HTMLElement): void => {
-    if (this.state.expandedMenuItemKey !== item.key) {
-      if (this.state.expandedMenuItemKey) {
-        this._onSubMenuDismiss();
-      }
-
-      // Focus the target to ensure when we close it, we're focusing on the correct element.
-      target.focus();
-      this.setState({
-        expandedMenuItemKey: item.key,
-        submenuTarget: target,
-      });
-    }
-  };
 
   private _getSubmenuProps() {
     const { submenuTarget, expandedMenuItemKey } = this.state;
@@ -1417,37 +1421,22 @@ class ContextualMenuBaseClass extends React.Component<
       }
     }
   }
+}
 
-  /**
-   * This function is called ASYNCHRONOUSLY, and so there is a chance it is called
-   * after the component is unmounted. The _mounted property is added to prevent
-   * from calling setState() after unmount. Do NOT copy this pattern in synchronous
-   * code.
-   */
-  private _onSubMenuDismiss = (ev?: any, dismissAll?: boolean): void => {
-    if (dismissAll) {
-      this.dismiss(ev, dismissAll);
-    } else if (this._mounted) {
-      this.setState({
-        expandedMenuItemKey: undefined,
-        submenuTarget: undefined,
-      });
-    }
-  };
-
-  private _getSubMenuId = (item: IContextualMenuItem): string | undefined => {
-    let { subMenuId } = this.state;
-
-    if (item.subMenuProps && item.subMenuProps.id) {
-      subMenuId = item.subMenuProps.id;
-    }
-
-    return subMenuId;
-  };
-
-  private _onPointerAndTouchEvent = (ev: React.TouchEvent<HTMLElement> | PointerEvent) => {
-    this._cancelSubMenuTimer();
-  };
+function ContextualMenuListItem({
+  content,
+  classNames,
+  title,
+}: {
+  content: React.ReactNode;
+  classNames: IMenuItemClassNames; // tslint:disable-line:deprecation
+  title?: string;
+}) {
+  return (
+    <li role="presentation" title={title} className={classNames.item}>
+      {content}
+    </li>
+  );
 }
 
 /**
