@@ -364,8 +364,8 @@ class ContextualMenuBaseClass extends React.Component<
 
   // tslint:disable-next-line function-name
   public UNSAFE_componentWillUpdate(newProps: IContextualMenuProps): void {
-    if (this._isHidden(newProps) !== this._isHidden(this.props)) {
-      if (this._isHidden(newProps)) {
+    if (!!newProps.hidden !== !!this.props.hidden) {
+      if (!!newProps.hidden) {
         this._onMenuClosed();
       } else {
         this._onMenuOpened();
@@ -580,15 +580,6 @@ class ContextualMenuBaseClass extends React.Component<
     } else {
       return null;
     }
-  }
-
-  /**
-   * Return whether the contextual menu is hidden.
-   * Undefined value for hidden is equivalent to hidden being false.
-   * @param props - Props for the component
-   */
-  private _isHidden(props: IContextualMenuProps) {
-    return !!props.hidden;
   }
 
   private _onMenuOpened() {
