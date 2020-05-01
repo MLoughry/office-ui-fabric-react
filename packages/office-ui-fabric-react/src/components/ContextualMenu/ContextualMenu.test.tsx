@@ -1016,7 +1016,7 @@ describe('ContextualMenu', () => {
       expect(document.querySelector('.ms-ContextualMenu-Callout')).not.toEqual(null);
 
       // 2. Open sub menu
-      contextualItem.current!.openSubMenu();
+      act(() => contextualItem.current!.openSubMenu());
       expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
 
       // 3. Dismiss parent menu - sub menu should disappear from DOM.
@@ -1031,7 +1031,7 @@ describe('ContextualMenu', () => {
       expect(document.querySelector('.ms-ContextualMenu-Callout')).not.toEqual(null);
 
       // 2. Open sub menu
-      contextualItem.current!.openSubMenu();
+      act(() => contextualItem.current!.openSubMenu());
       expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
 
       // 3. Dismiss parent menu - sub menu should disappear from DOM.
@@ -1128,14 +1128,14 @@ describe('ContextualMenu', () => {
       });
 
       it('openSubMenu will open the item`s submenu if present', () => {
-        contextualItem.current!.openSubMenu();
+        act(() => contextualItem.current!.openSubMenu());
         expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
       });
 
       it('dismissSubMenu will close the item`s submenu if present', () => {
-        contextualItem.current!.openSubMenu();
+        act(() => contextualItem.current!.openSubMenu());
         expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
-        contextualItem.current!.dismissSubMenu();
+        act(() => contextualItem.current!.dismissSubMenu());
         expect(document.querySelector('.SubMenuClass')).toEqual(null);
       });
 
@@ -1174,14 +1174,14 @@ describe('ContextualMenu', () => {
       });
 
       it('openSubMenu will open the item`s submenu if present', () => {
-        contextualItem.current!.openSubMenu();
+        act(() => contextualItem.current!.openSubMenu());
         expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
       });
 
       it('dismissSubMenu will close the item`s submenu if present', () => {
-        contextualItem.current!.openSubMenu();
+        act(() => contextualItem.current!.openSubMenu());
         expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
-        contextualItem.current!.dismissSubMenu();
+        act(() => contextualItem.current!.dismissSubMenu());
         expect(document.querySelector('.SubMenuClass')).toEqual(null);
       });
 
@@ -1220,14 +1220,14 @@ describe('ContextualMenu', () => {
       });
 
       it('openSubMenu will open the item`s submenu if present', () => {
-        contextualItem.current!.openSubMenu();
+        act(() => contextualItem.current!.openSubMenu());
         expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
       });
 
       it('dismissSubMenu will close the item`s submenu if present', () => {
-        contextualItem.current!.openSubMenu();
+        act(() => contextualItem.current!.openSubMenu());
         expect(document.querySelector('.SubMenuClass')).not.toEqual(null);
-        contextualItem.current!.dismissSubMenu();
+        act(() => contextualItem.current!.dismissSubMenu());
         expect(document.querySelector('.SubMenuClass')).toEqual(null);
       });
 
