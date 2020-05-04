@@ -1,113 +1,65 @@
 import * as React from 'react';
 import { hasSubmenu, getIsChecked } from '../../utilities/contextualMenu/index';
-import { getRTL, initializeComponentRef } from '../../Utilities';
+import { getRTL } from '../../Utilities';
 import { Icon } from '../../Icon';
 import { IContextualMenuItemProps } from './ContextualMenuItem.types';
 
-const renderItemIcon = (props: IContextualMenuItemProps) => {
-  const { item, hasIcons, classNames } = props;
+export const ContextualMenuItemBase = React.forwardRef(
+  (props: IContextualMenuItemProps, forwardedRef: React.Ref<HTMLDivElement>) => {
+    const { item, classNames, onCheckmarkClick, getSubmenuTarget, theme, hasIcons } = props;
 
-  const { iconProps } = item;
+    const openSubMenu = (): void => {
+      const submenuTarget = getSubmenuTarget?.();
+      if (hasSubmenu(item) && submenuTarget) {
+        props.openSubMenu?.(item, submenuTarget);
+      }
+    };
 
-  if (!hasIcons) {
-    return null;
-  }
+    const dismissSubMenu = (): void => {
+      if (hasSubmenu(item)) {
+        props.dismissSubMenu?.();
+      }
+    };
 
-  if (item.onRenderIcon) {
-    return item.onRenderIcon(props);
-  }
+    const dismissMenu = (dismissAll?: boolean): void => {
+      props.dismissMenu?.(undefined /* ev */, dismissAll);
+    };
 
-  return <Icon {...iconProps} className={classNames.icon} />;
-};
+    React.useImperativeHandle(props.componentRef, () => ({ openSubMenu, dismissSubMenu, dismissMenu }), [
+      openSubMenu,
+      dismissSubMenu,
+      dismissMenu,
+    ]);
 
-const renderCheckMarkIcon = ({ onCheckmarkClick, item, classNames }: IContextualMenuItemProps) => {
-  const isItemChecked = getIsChecked(item);
-  if (onCheckmarkClick) {
-    // Ensures that the item is passed as the first argument to the checkmark click callback.
-    const onClick = (e: React.MouseEvent<HTMLElement>) => onCheckmarkClick(item, e);
-
-    return (
-      <Icon
-        iconName={item.canCheck !== false && isItemChecked ? 'CheckMark' : ''}
-        className={classNames.checkmarkIcon}
-        onClick={onClick}
-      />
-    );
-  }
-  return null;
-};
-
-const renderItemName = ({ item, classNames }: IContextualMenuItemProps) => {
-  // tslint:disable:deprecation
-  if (item.text || item.name) {
-    return <span className={classNames.label}>{item.text || item.name}</span>;
-  }
-  // tslint:enable:deprecation
-  return null;
-};
-
-const renderSecondaryText = ({ item, classNames }: IContextualMenuItemProps) => {
-  if (item.secondaryText) {
-    return <span className={classNames.secondaryText}>{item.secondaryText}</span>;
-  }
-  return null;
-};
-
-const renderSubMenuIcon = ({ item, classNames, theme }: IContextualMenuItemProps) => {
-  if (hasSubmenu(item)) {
-    return (
-      <Icon
-        iconName={getRTL(theme) ? 'ChevronLeft' : 'ChevronRight'}
-        {...item.submenuIconProps}
-        className={classNames.subMenuIcon}
-      />
-    );
-  }
-  return null;
-};
-
-export class ContextualMenuItemBase extends React.Component<IContextualMenuItemProps, {}> {
-  constructor(props: IContextualMenuItemProps) {
-    super(props);
-
-    initializeComponentRef(this);
-  }
-
-  public render() {
-    const { item, classNames } = this.props;
+    // tslint:disable-next-line: deprecation
+    const itemName = item.text || item.name;
 
     return (
-      <div className={item.split ? classNames.linkContentMenu : classNames.linkContent}>
-        {renderCheckMarkIcon(this.props)}
-        {renderItemIcon(this.props)}
-        {renderItemName(this.props)}
-        {renderSecondaryText(this.props)}
-        {renderSubMenuIcon(this.props)}
+      <div className={item.split ? classNames.linkContentMenu : classNames.linkContent} ref={forwardedRef}>
+        {/* renderCheckmark */
+        onCheckmarkClick ? (
+          <Icon
+            iconName={item.canCheck !== false && getIsChecked(item) ? 'CheckMark' : ''}
+            className={classNames.checkmarkIcon}
+            onClick={onCheckmarkClick.bind(null, item)}
+          />
+        ) : null}
+        {/*renderItemIcon*/ hasIcons
+          ? item.onRenderIcon?.(props) ?? <Icon {...item.iconProps} className={classNames.icon} />
+          : null}
+        {/*renderItemName*/ itemName ? <span className={classNames.label}>{itemName}</span> : null}
+        {/* renderSecondaryText */
+        item.secondaryText ? <span className={classNames.secondaryText}>{item.secondaryText}</span> : null}
+        {/* renderSubMenuIcon */
+        hasSubmenu(item) ? (
+          <Icon
+            iconName={getRTL(theme) ? 'ChevronLeft' : 'ChevronRight'}
+            {...item.submenuIconProps}
+            className={classNames.subMenuIcon}
+          />
+        ) : null}
       </div>
     );
-  }
-
-  public openSubMenu = (): void => {
-    const { item, openSubMenu, getSubmenuTarget } = this.props;
-    if (getSubmenuTarget) {
-      const submenuTarget = getSubmenuTarget();
-      if (hasSubmenu(item) && openSubMenu && submenuTarget) {
-        openSubMenu(item, submenuTarget);
-      }
-    }
-  };
-
-  public dismissSubMenu = (): void => {
-    const { item, dismissSubMenu } = this.props;
-    if (hasSubmenu(item) && dismissSubMenu) {
-      dismissSubMenu();
-    }
-  };
-
-  public dismissMenu = (dismissAll?: boolean): void => {
-    const { dismissMenu } = this.props;
-    if (dismissMenu) {
-      dismissMenu(undefined /* ev */, dismissAll);
-    }
-  };
-}
+  },
+);
+ContextualMenuItemBase.displayName = 'ContextualMenuItemBase';
