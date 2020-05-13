@@ -61,7 +61,12 @@ const DEFAULT_STRINGS: IDatePickerStrings = {
   weekNumberFormatString: 'Week number {0}',
 };
 
-export class DatePickerBase extends React.Component<IDatePickerProps, IDatePickerState> implements IDatePicker {
+export const DatePickerBase = React.forwardRef((props: IDatePickerProps, ref: React.Ref<unknown>) => {
+  return <DatePickerBaseClass {...props} />;
+});
+DatePickerBase.displayName = 'DatePickerBase';
+
+class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerState> implements IDatePicker {
   public static defaultProps: IDatePickerProps = {
     allowTextInput: false,
     formatDate: (date: Date) => {
