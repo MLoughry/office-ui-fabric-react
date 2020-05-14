@@ -23,12 +23,11 @@ import { DirectionalHint } from '../../common/DirectionalHint';
 import { TextField, ITextField } from '../../TextField';
 import { compareDates, compareDatePart } from '../../utilities/dateMath/DateMath';
 import { FocusTrapZone } from '../../FocusTrapZone';
-import { useId } from '@uifabric/react-hooks';
+import { useId, useControllableValue } from '@uifabric/react-hooks';
 
 const getClassNames = classNamesFunction<IDatePickerStyleProps, IDatePickerStyles>();
 
 export interface IDatePickerState {
-  selectedDate?: Date;
   formattedDate?: string;
   isDatePickerShown?: boolean;
   errorMessage?: string;
@@ -103,20 +102,29 @@ export const DatePickerBase = React.forwardRef(
   (propsWithoutDefaults: IDatePickerProps, forwardedRef: React.Ref<unknown>) => {
     const props = getPropsWithDefaults(DEFAULT_PROPS, propsWithoutDefaults);
     const id = useId('DatePicker', props.id);
+    const [selectedDate, setSelectedDate] = useControllableValue(props.value, undefined, (ev, date) =>
+      props.onSelectDate?.(date),
+    );
 
-    return <DatePickerBaseClass {...props} id={id} />;
+    return <DatePickerBaseClass {...props} id={id} selectedDate={selectedDate} setSelectedDate={setSelectedDate} />;
   },
 );
 DatePickerBase.displayName = 'DatePickerBase';
 
-class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerState> implements IDatePicker {
+type IDatePickerBaseClassProps = Omit<IDatePickerProps, 'value'> & {
+  selectedDate: Date | undefined;
+  setSelectedDate: (date: Date | undefined) => void;
+  id: string;
+};
+
+class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDatePickerState> implements IDatePicker {
   private _calendar = React.createRef<ICalendar>();
   private _datePickerDiv = React.createRef<HTMLDivElement>();
   private _textField = React.createRef<ITextField>();
   private _preventFocusOpeningPicker: boolean;
   private _id: string;
 
-  constructor(props: any) {
+  constructor(props: IDatePickerBaseClassProps) {
     super(props);
 
     initializeComponentRef(this);
@@ -128,14 +136,14 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
   }
 
   // tslint:disable-next-line function-name
-  public UNSAFE_componentWillReceiveProps(nextProps: IDatePickerProps): void {
-    const { formatDate, value } = nextProps;
+  public UNSAFE_componentWillReceiveProps(nextProps: IDatePickerBaseClassProps): void {
+    const { formatDate, selectedDate } = nextProps;
 
     if (
       compareDates(this.props.minDate!, nextProps.minDate!) &&
       compareDates(this.props.maxDate!, nextProps.maxDate!) &&
       this.props.isRequired === nextProps.isRequired &&
-      compareDates(this.state.selectedDate!, value!) &&
+      compareDates(this.props.selectedDate!, selectedDate!) &&
       this.props.formatDate === formatDate
     ) {
       // if the props we care about haven't changed, don't run validation or updates
@@ -150,11 +158,10 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
     // passed in or if the formatting function was modified. We only update the selected date if either of these
     // had a legit change. Note tha the bug will still repro when only the formatDate was passed in props and this
     // is the result of the onSelectDate callback, but this should be a rare scenario.
-    const oldValue = this.state.selectedDate;
-    if (!compareDates(oldValue!, value!) || this.props.formatDate !== formatDate) {
+    const oldValue = this.props.selectedDate;
+    if (!compareDates(oldValue!, selectedDate!) || this.props.formatDate !== formatDate) {
       this.setState({
-        selectedDate: value || undefined,
-        formattedDate: formatDate && value ? formatDate(value) : '',
+        formattedDate: formatDate && selectedDate ? formatDate(selectedDate) : '',
       });
     }
   }
@@ -194,8 +201,9 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
       allFocusable,
       calendarAs: CalendarType = Calendar,
       tabIndex,
+      selectedDate,
     } = this.props;
-    const { isDatePickerShown, formattedDate, selectedDate } = this.state;
+    const { isDatePickerShown, formattedDate } = this.state;
 
     const classNames = getClassNames(styles, {
       theme: theme!,
@@ -303,12 +311,13 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
     this.setState(this._getDefaultState());
   }
 
-  private _setErrorMessage(setState: boolean, nextProps?: IDatePickerProps): string | undefined {
-    const { isRequired, strings, value, minDate, maxDate, initialPickerDate } = nextProps || this.props;
-    let errorMessage = !initialPickerDate && isRequired && !value ? strings!.isRequiredErrorMessage || ' ' : undefined;
+  private _setErrorMessage(setState: boolean, nextProps?: IDatePickerBaseClassProps): string | undefined {
+    const { isRequired, strings, selectedDate, minDate, maxDate, initialPickerDate } = nextProps || this.props;
+    let errorMessage =
+      !initialPickerDate && isRequired && !selectedDate ? strings!.isRequiredErrorMessage || ' ' : undefined;
 
-    if (!errorMessage && value) {
-      errorMessage = this._isDateOutOfBounds(value!, minDate, maxDate)
+    if (!errorMessage && selectedDate) {
+      errorMessage = this._isDateOutOfBounds(selectedDate!, minDate, maxDate)
         ? strings!.isOutOfBoundsErrorMessage || ' '
         : undefined;
     }
@@ -329,8 +338,8 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
       this.props.calendarProps.onSelectDate(date);
     }
 
+    this.props.setSelectedDate(date);
     this.setState({
-      selectedDate: date,
       formattedDate: formatDate && date ? formatDate(date) : '',
     });
 
@@ -506,10 +515,10 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
         // The formatted string might be ambiguous (ex: "1/2/3" or "New Year Eve") and the parser might
         // not be able to come up with the exact same date.
         if (
-          this.state.selectedDate &&
+          this.props.selectedDate &&
           !this.state.errorMessage &&
           formatDate &&
-          formatDate(this.state.selectedDate) === inputValue
+          formatDate(this.props.selectedDate) === inputValue
         ) {
           return;
         }
@@ -519,7 +528,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
         if (!date || isNaN(date.getTime())) {
           // Reset invalid input field, if formatting is available
           if (formatDate) {
-            date = this.state.selectedDate;
+            date = this.props.selectedDate;
             this.setState({
               formattedDate: formatDate(date!).toString(),
             });
@@ -535,8 +544,8 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
               errorMessage: strings!.isOutOfBoundsErrorMessage || ' ',
             });
           } else {
+            this.props.setSelectedDate(date);
             this.setState({
-              selectedDate: date,
               errorMessage: '',
             });
 
@@ -578,7 +587,6 @@ class DatePickerBaseClass extends React.Component<IDatePickerProps, IDatePickerS
 
   private _getDefaultState(props: IDatePickerProps = this.props): IDatePickerState {
     return {
-      selectedDate: props.value || undefined,
       formattedDate: props.formatDate && props.value ? props.formatDate(props.value) : '',
       isDatePickerShown: false,
       errorMessage: this._setErrorMessage(false),
