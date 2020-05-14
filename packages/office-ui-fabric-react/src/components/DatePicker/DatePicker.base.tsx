@@ -102,7 +102,7 @@ function useFormattedDate({ formatDate }: IDatePickerProps, selectedDate: Date |
     if (typeof date === 'string') {
       setFormattedDate(date);
     } else {
-      setFormattedDate(formatDate?.(selectedDate) || '');
+      setFormattedDate(formatDate?.(date) || '');
     }
   };
 
@@ -542,10 +542,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
         // Check if date is null, or date is Invalid Date
         if (!date || isNaN(date.getTime())) {
           // Reset invalid input field, if formatting is available
-          if (formatDate) {
-            date = this.props.selectedDate;
-            this.props.setFormattedDate(date);
-          }
+          this.props.setFormattedDate(this.props.selectedDate);
 
           this.setState({
             errorMessage: strings!.invalidInputErrorMessage || ' ',
