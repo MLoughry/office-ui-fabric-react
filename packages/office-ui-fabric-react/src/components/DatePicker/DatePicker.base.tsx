@@ -28,7 +28,6 @@ import { useId, useControllableValue } from '@uifabric/react-hooks';
 const getClassNames = classNamesFunction<IDatePickerStyleProps, IDatePickerStyles>();
 
 export interface IDatePickerState {
-  isDatePickerShown?: boolean;
   errorMessage?: string;
 }
 
@@ -124,6 +123,20 @@ function useFormattedDate({ formatDate }: IDatePickerProps, selectedDate: Date |
   return [formattedDate, setFormattedDateOrString] as const;
 }
 
+function useIsDatePickerShown({ onAfterMenuDismiss }: IDatePickerProps) {
+  const [isDatePickerShown, setIsDatePickerShown] = React.useState(false);
+  const isInitialMount = React.useRef(true);
+
+  React.useEffect(() => {
+    if (!isInitialMount.current && !isDatePickerShown) {
+      onAfterMenuDismiss?.();
+    }
+    isInitialMount.current = false;
+  }, [isDatePickerShown]);
+
+  return [isDatePickerShown, setIsDatePickerShown] as const;
+}
+
 export const DatePickerBase = React.forwardRef(
   (propsWithoutDefaults: IDatePickerProps, forwardedRef: React.Ref<unknown>) => {
     const props = getPropsWithDefaults(DEFAULT_PROPS, propsWithoutDefaults);
@@ -132,6 +145,7 @@ export const DatePickerBase = React.forwardRef(
       props.onSelectDate?.(date),
     );
     const [formattedDate, setFormattedDate] = useFormattedDate(props, selectedDate);
+    const [isDatePickerShown, setIsDatePickerShown] = useIsDatePickerShown(props);
 
     return (
       <DatePickerBaseClass
@@ -141,6 +155,8 @@ export const DatePickerBase = React.forwardRef(
         setSelectedDate={setSelectedDate}
         formattedDate={formattedDate}
         setFormattedDate={setFormattedDate}
+        isDatePickerShown={isDatePickerShown}
+        setIsDatePickerShown={setIsDatePickerShown}
       />
     );
   },
@@ -153,6 +169,8 @@ type IDatePickerBaseClassProps = Omit<IDatePickerProps, 'value'> & {
   id: string;
   formattedDate: string;
   setFormattedDate: (value: Date | string | undefined) => void;
+  isDatePickerShown: boolean;
+  setIsDatePickerShown: (value: boolean) => void;
 };
 
 class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDatePickerState> implements IDatePicker {
@@ -193,15 +211,6 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
     this._id = nextProps.id || this._id;
   }
 
-  public componentDidUpdate(prevProps: IDatePickerProps, prevState: IDatePickerState) {
-    if (prevState.isDatePickerShown && !this.state.isDatePickerShown) {
-      // If DatePicker's menu (Calendar) is closed, run onAfterMenuDismiss
-      if (this.props.onAfterMenuDismiss) {
-        this.props.onAfterMenuDismiss();
-      }
-    }
-  }
-
   public render(): JSX.Element {
     const {
       firstDayOfWeek,
@@ -230,8 +239,8 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
       tabIndex,
       selectedDate,
       formattedDate,
+      isDatePickerShown,
     } = this.props;
-    const { isDatePickerShown } = this.state;
 
     const classNames = getClassNames(styles, {
       theme: theme!,
@@ -408,7 +417,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
     const { allowTextInput, textField } = this.props;
 
     if (allowTextInput) {
-      if (this.state.isDatePickerShown) {
+      if (this.props.isDatePickerShown) {
         this._dismissDatePickerPopup();
       }
 
@@ -430,7 +439,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
       case KeyCodes.enter:
         ev.preventDefault();
         ev.stopPropagation();
-        if (!this.state.isDatePickerShown) {
+        if (!this.props.isDatePickerShown) {
           this._validateTextInput();
           this._showDatePickerPopup();
         } else {
@@ -452,7 +461,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
   };
 
   private _onTextFieldClick = (ev: React.MouseEvent<HTMLElement>): void => {
-    if (!this.props.disableAutoFocus && !this.state.isDatePickerShown && !this.props.disabled) {
+    if (!this.props.disableAutoFocus && !this.props.isDatePickerShown && !this.props.disabled) {
       this._showDatePickerPopup();
       return;
     }
@@ -463,7 +472,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
 
   private _onIconClick = (ev: React.MouseEvent<HTMLElement>): void => {
     ev.stopPropagation();
-    if (!this.state.isDatePickerShown && !this.props.disabled) {
+    if (!this.props.isDatePickerShown && !this.props.disabled) {
       this._showDatePickerPopup();
     } else if (this.props.allowTextInput) {
       this._dismissDatePickerPopup();
@@ -471,25 +480,16 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
   };
 
   private _showDatePickerPopup(): void {
-    if (!this.state.isDatePickerShown) {
+    if (!this.props.isDatePickerShown) {
       this._preventFocusOpeningPicker = true;
-      this.setState({
-        isDatePickerShown: true,
-      });
+      this.props.setIsDatePickerShown(true);
     }
   }
 
   private _dismissDatePickerPopup = (): void => {
-    if (this.state.isDatePickerShown) {
-      this.setState(
-        {
-          isDatePickerShown: false,
-        },
-        () => {
-          // setState is async, so we must call validate in a callback
-          this._validateTextInput();
-        },
-      );
+    if (this.props.isDatePickerShown) {
+      this.props.setIsDatePickerShown(false);
+      this._validateTextInput(true);
     }
   };
 
@@ -503,13 +503,13 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
   };
 
   private _handleEscKey = (ev: React.KeyboardEvent<HTMLElement>): void => {
-    if (this.state.isDatePickerShown) {
+    if (this.props.isDatePickerShown) {
       ev.stopPropagation();
     }
     this._calendarDismissed();
   };
 
-  private _validateTextInput = (): void => {
+  private _validateTextInput = (forceValidation?: boolean): void => {
     const {
       isRequired,
       allowTextInput,
@@ -521,11 +521,6 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
       maxDate,
     } = this.props;
     const inputValue = this.props.formattedDate;
-
-    // Do validation only if DatePicker's popup is dismissed
-    if (this.state.isDatePickerShown) {
-      return;
-    }
 
     if (allowTextInput) {
       let date = null;
@@ -603,7 +598,6 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
 
   private _getDefaultState(props: IDatePickerBaseClassProps = this.props): IDatePickerState {
     return {
-      isDatePickerShown: false,
       errorMessage: this._setErrorMessage(false),
     };
   }
@@ -613,7 +607,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
   }
 
   private _getErrorMessage(): string | undefined {
-    if (this.state.isDatePickerShown) {
+    if (this.props.isDatePickerShown) {
       return undefined;
     }
     return this.state.errorMessage;
