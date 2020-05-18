@@ -92,12 +92,16 @@ const DEFAULT_PROPS: IDatePickerProps = {
   allFocusable: false,
 };
 
-function useFormattedDate({ formatDate }: IDatePickerProps, selectedDate: Date | undefined) {
+function useDateState({ formatDate, onSelectDate, value, initialPickerDate }: IDatePickerProps) {
+  const [selectedDate, setSelectedDate] = useControllableValue(value, initialPickerDate, (ev, date) =>
+    onSelectDate?.(date),
+  );
   const [formattedDate, setFormattedDate] = React.useState(() => formatDate?.(selectedDate) || '');
-  const setFormattedDateOrString = (date: Date | string | undefined): void => {
+  const setDate = (date: Date | string | undefined): void => {
     if (typeof date === 'string') {
       setFormattedDate(date);
     } else {
+      setSelectedDate(date);
       setFormattedDate(formatDate?.(date) || '');
     }
   };
@@ -116,7 +120,7 @@ function useFormattedDate({ formatDate }: IDatePickerProps, selectedDate: Date |
     formatDate,
   ]);
 
-  return [formattedDate, setFormattedDateOrString] as const;
+  return [selectedDate, formattedDate, setDate] as const;
 }
 
 function useIsInitialMount() {
@@ -171,10 +175,7 @@ export const DatePickerBase = React.forwardRef(
   (propsWithoutDefaults: IDatePickerProps, forwardedRef: React.Ref<unknown>) => {
     const props = getPropsWithDefaults(DEFAULT_PROPS, propsWithoutDefaults);
     const id = useId('DatePicker', props.id);
-    const [selectedDate, setSelectedDate] = useControllableValue(props.value, props.initialPickerDate, (ev, date) =>
-      props.onSelectDate?.(date),
-    );
-    const [formattedDate, setFormattedDate] = useFormattedDate(props, selectedDate);
+    const [selectedDate, formattedDate, setDate] = useDateState(props);
     const [isDatePickerShown, setIsDatePickerShown] = useIsDatePickerShown(props);
     const [errorMessage, setErrorMessage] = useErrorMessage(props, isDatePickerShown, selectedDate);
 
@@ -183,9 +184,8 @@ export const DatePickerBase = React.forwardRef(
         {...props}
         id={id}
         selectedDate={selectedDate}
-        setSelectedDate={setSelectedDate}
         formattedDate={formattedDate}
-        setFormattedDate={setFormattedDate}
+        setDate={setDate}
         isDatePickerShown={isDatePickerShown}
         setIsDatePickerShown={setIsDatePickerShown}
         errorMessage={errorMessage}
@@ -198,10 +198,9 @@ DatePickerBase.displayName = 'DatePickerBase';
 
 type IDatePickerBaseClassProps = Omit<IDatePickerProps, 'value'> & {
   selectedDate: Date | undefined;
-  setSelectedDate: (date: Date | undefined) => void;
   id: string;
   formattedDate: string;
-  setFormattedDate: (value: Date | string | undefined) => void;
+  setDate: (value: Date | string | undefined) => void;
   isDatePickerShown: boolean;
   setIsDatePickerShown: (value: boolean) => void;
   errorMessage: string | undefined;
@@ -367,8 +366,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
       this.props.calendarProps.onSelectDate(date);
     }
 
-    this.props.setSelectedDate(date);
-    this.props.setFormattedDate(date);
+    this.props.setDate(date);
 
     this._calendarDismissed();
   };
@@ -417,7 +415,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
 
       const { isRequired, strings } = this.props;
 
-      this.props.setFormattedDate(newValue);
+      this.props.setDate(newValue);
       this.props.setErrorMessage(isRequired && !newValue ? strings!.isRequiredErrorMessage || ' ' : undefined);
     }
 
@@ -534,7 +532,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
         // Check if date is null, or date is Invalid Date
         if (!date || isNaN(date.getTime())) {
           // Reset invalid input field, if formatting is available
-          this.props.setFormattedDate(this.props.selectedDate);
+          this.props.setDate(this.props.selectedDate);
 
           this.props.setErrorMessage(strings!.invalidInputErrorMessage || ' ');
         } else {
@@ -542,15 +540,8 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
           if (isDateOutOfBounds(date, minDate, maxDate)) {
             this.props.setErrorMessage(strings!.isOutOfBoundsErrorMessage || ' ');
           } else {
-            this.props.setSelectedDate(date);
             this.props.setErrorMessage('');
-
-            // When formatting is available:
-            // If formatted date is valid, but is different from input, update with formatted date.
-            // This occurs when an invalid date is entered twice.
-            if (formatDate && formatDate(date) !== inputValue) {
-              this.props.setFormattedDate(date);
-            }
+            this.props.setDate(date);
           }
         }
       } else {
