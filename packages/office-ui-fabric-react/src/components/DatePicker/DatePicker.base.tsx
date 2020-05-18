@@ -21,15 +21,11 @@ import { FirstWeekOfYear } from '../../utilities/dateValues/DateValues';
 import { Callout } from '../../Callout';
 import { DirectionalHint } from '../../common/DirectionalHint';
 import { TextField, ITextField } from '../../TextField';
-import { compareDates, compareDatePart } from '../../utilities/dateMath/DateMath';
+import { compareDatePart } from '../../utilities/dateMath/DateMath';
 import { FocusTrapZone } from '../../FocusTrapZone';
 import { useId, useControllableValue } from '@uifabric/react-hooks';
 
 const getClassNames = classNamesFunction<IDatePickerStyleProps, IDatePickerStyles>();
-
-export interface IDatePickerState {
-  errorMessage?: string;
-}
 
 const DEFAULT_STRINGS: IDatePickerStrings = {
   months: [
@@ -123,29 +119,64 @@ function useFormattedDate({ formatDate }: IDatePickerProps, selectedDate: Date |
   return [formattedDate, setFormattedDateOrString] as const;
 }
 
+function useIsInitialMount() {
+  const isInitialMount = React.useRef(true);
+  React.useEffect(() => {
+    isInitialMount.current = false;
+  }, []);
+
+  return isInitialMount.current;
+}
+
 function useIsDatePickerShown({ onAfterMenuDismiss }: IDatePickerProps) {
   const [isDatePickerShown, setIsDatePickerShown] = React.useState(false);
-  const isInitialMount = React.useRef(true);
-
+  const isInitialMount = useIsInitialMount();
   React.useEffect(() => {
-    if (!isInitialMount.current && !isDatePickerShown) {
+    if (!isInitialMount && !isDatePickerShown) {
       onAfterMenuDismiss?.();
     }
-    isInitialMount.current = false;
   }, [isDatePickerShown]);
 
   return [isDatePickerShown, setIsDatePickerShown] as const;
+}
+
+function useErrorMessage(
+  { isRequired, strings, minDate, maxDate }: IDatePickerProps,
+  isDatePickerShown: boolean,
+  selectedDate: Date | undefined,
+) {
+  const isInitialMount = useIsInitialMount();
+  const [errorMessage, setErrorMessage] = React.useState<string | undefined>();
+
+  if (!isInitialMount && isRequired && !selectedDate) {
+    const requiredErrorMessage = strings?.isRequiredErrorMessage || ' ';
+    if (errorMessage !== requiredErrorMessage) {
+      setErrorMessage(requiredErrorMessage);
+    }
+  } else if (selectedDate && isDateOutOfBounds(selectedDate, minDate, maxDate)) {
+    const isOutOfBoundsErrorMessage = strings?.isOutOfBoundsErrorMessage || ' ';
+    if (errorMessage !== isOutOfBoundsErrorMessage) {
+      setErrorMessage(isOutOfBoundsErrorMessage);
+    }
+  }
+
+  return [isDatePickerShown ? undefined : errorMessage, setErrorMessage] as const;
+}
+
+function isDateOutOfBounds(date: Date, minDate?: Date, maxDate?: Date): boolean {
+  return (!!minDate && compareDatePart(minDate!, date) > 0) || (!!maxDate && compareDatePart(maxDate!, date) < 0);
 }
 
 export const DatePickerBase = React.forwardRef(
   (propsWithoutDefaults: IDatePickerProps, forwardedRef: React.Ref<unknown>) => {
     const props = getPropsWithDefaults(DEFAULT_PROPS, propsWithoutDefaults);
     const id = useId('DatePicker', props.id);
-    const [selectedDate, setSelectedDate] = useControllableValue(props.value, undefined, (ev, date) =>
+    const [selectedDate, setSelectedDate] = useControllableValue(props.value, props.initialPickerDate, (ev, date) =>
       props.onSelectDate?.(date),
     );
     const [formattedDate, setFormattedDate] = useFormattedDate(props, selectedDate);
     const [isDatePickerShown, setIsDatePickerShown] = useIsDatePickerShown(props);
+    const [errorMessage, setErrorMessage] = useErrorMessage(props, isDatePickerShown, selectedDate);
 
     return (
       <DatePickerBaseClass
@@ -157,6 +188,8 @@ export const DatePickerBase = React.forwardRef(
         setFormattedDate={setFormattedDate}
         isDatePickerShown={isDatePickerShown}
         setIsDatePickerShown={setIsDatePickerShown}
+        errorMessage={errorMessage}
+        setErrorMessage={setErrorMessage}
       />
     );
   },
@@ -171,9 +204,11 @@ type IDatePickerBaseClassProps = Omit<IDatePickerProps, 'value'> & {
   setFormattedDate: (value: Date | string | undefined) => void;
   isDatePickerShown: boolean;
   setIsDatePickerShown: (value: boolean) => void;
+  errorMessage: string | undefined;
+  setErrorMessage: (value: string | undefined) => void;
 };
 
-class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDatePickerState> implements IDatePicker {
+class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, never> implements IDatePicker {
   private _calendar = React.createRef<ICalendar>();
   private _datePickerDiv = React.createRef<HTMLDivElement>();
   private _textField = React.createRef<ITextField>();
@@ -184,31 +219,10 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
     super(props);
 
     initializeComponentRef(this);
-    this.state = this._getDefaultState();
 
     this._id = props.id;
 
     this._preventFocusOpeningPicker = false;
-  }
-
-  // tslint:disable-next-line function-name
-  public UNSAFE_componentWillReceiveProps(nextProps: IDatePickerBaseClassProps): void {
-    const { formatDate, selectedDate } = nextProps;
-
-    if (
-      compareDates(this.props.minDate!, nextProps.minDate!) &&
-      compareDates(this.props.maxDate!, nextProps.maxDate!) &&
-      this.props.isRequired === nextProps.isRequired &&
-      compareDates(this.props.selectedDate!, selectedDate!) &&
-      this.props.formatDate === formatDate
-    ) {
-      // if the props we care about haven't changed, don't run validation or updates
-      return;
-    }
-
-    this._setErrorMessage(true, nextProps);
-
-    this._id = nextProps.id || this._id;
   }
 
   public render(): JSX.Element {
@@ -265,7 +279,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
             aria-controls={isDatePickerShown ? calloutId : undefined}
             required={isRequired}
             disabled={disabled}
-            errorMessage={this._getErrorMessage()}
+            errorMessage={this.props.errorMessage}
             placeholder={placeholder}
             borderless={borderless}
             value={formattedDate}
@@ -345,27 +359,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
   }
 
   public reset(): void {
-    this.setState(this._getDefaultState());
-  }
-
-  private _setErrorMessage(setState: boolean, nextProps?: IDatePickerBaseClassProps): string | undefined {
-    const { isRequired, strings, selectedDate, minDate, maxDate, initialPickerDate } = nextProps || this.props;
-    let errorMessage =
-      !initialPickerDate && isRequired && !selectedDate ? strings!.isRequiredErrorMessage || ' ' : undefined;
-
-    if (!errorMessage && selectedDate) {
-      errorMessage = this._isDateOutOfBounds(selectedDate!, minDate, maxDate)
-        ? strings!.isOutOfBoundsErrorMessage || ' '
-        : undefined;
-    }
-
-    if (setState) {
-      this.setState({
-        errorMessage: errorMessage,
-      });
-    }
-
-    return errorMessage;
+    // this.setState(this._getDefaultState());
   }
 
   private _onSelectDate = (date: Date): void => {
@@ -424,9 +418,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
       const { isRequired, strings } = this.props;
 
       this.props.setFormattedDate(newValue);
-      this.setState({
-        errorMessage: isRequired && !newValue ? strings!.isRequiredErrorMessage || ' ' : undefined,
-      });
+      this.props.setErrorMessage(isRequired && !newValue ? strings!.isRequiredErrorMessage || ' ' : undefined);
     }
 
     if (textField && textField.onChange) {
@@ -531,7 +523,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
         // not be able to come up with the exact same date.
         if (
           this.props.selectedDate &&
-          !this.state.errorMessage &&
+          !this.props.errorMessage &&
           formatDate &&
           formatDate(this.props.selectedDate) === inputValue
         ) {
@@ -544,20 +536,14 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
           // Reset invalid input field, if formatting is available
           this.props.setFormattedDate(this.props.selectedDate);
 
-          this.setState({
-            errorMessage: strings!.invalidInputErrorMessage || ' ',
-          });
+          this.props.setErrorMessage(strings!.invalidInputErrorMessage || ' ');
         } else {
           // Check against optional date boundaries
-          if (this._isDateOutOfBounds(date, minDate, maxDate)) {
-            this.setState({
-              errorMessage: strings!.isOutOfBoundsErrorMessage || ' ',
-            });
+          if (isDateOutOfBounds(date, minDate, maxDate)) {
+            this.props.setErrorMessage(strings!.isOutOfBoundsErrorMessage || ' ');
           } else {
             this.props.setSelectedDate(date);
-            this.setState({
-              errorMessage: '',
-            });
+            this.props.setErrorMessage('');
 
             // When formatting is available:
             // If formatted date is valid, but is different from input, update with formatted date.
@@ -569,9 +555,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
         }
       } else {
         // Only show error for empty inputValue if it is a required field
-        this.setState({
-          errorMessage: isRequired ? strings!.isRequiredErrorMessage || ' ' : '',
-        });
+        this.props.setErrorMessage(isRequired ? strings!.isRequiredErrorMessage || ' ' : '');
       }
 
       // Execute onSelectDate callback
@@ -582,31 +566,10 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, IDa
       }
     } else if (isRequired && !inputValue) {
       // Check when DatePicker is a required field but has NO input value
-      this.setState({
-        errorMessage: strings!.isRequiredErrorMessage || ' ',
-      });
+      this.props.setErrorMessage(strings!.isRequiredErrorMessage || ' ');
     } else {
       // Cleanup the error message
-      this.setState({
-        errorMessage: '',
-      });
+      this.props.setErrorMessage('');
     }
   };
-
-  private _getDefaultState(props: IDatePickerBaseClassProps = this.props): IDatePickerState {
-    return {
-      errorMessage: this._setErrorMessage(false),
-    };
-  }
-
-  private _isDateOutOfBounds(date: Date, minDate?: Date, maxDate?: Date): boolean {
-    return (!!minDate && compareDatePart(minDate!, date) > 0) || (!!maxDate && compareDatePart(maxDate!, date) < 0);
-  }
-
-  private _getErrorMessage(): string | undefined {
-    if (this.props.isDatePickerShown) {
-      return undefined;
-    }
-    return this.state.errorMessage;
-  }
 }
