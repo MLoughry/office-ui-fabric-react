@@ -132,16 +132,61 @@ function useIsInitialMount() {
   return isInitialMount.current;
 }
 
-function useIsDatePickerShown({ onAfterMenuDismiss }: IDatePickerProps) {
+function useIsDatePickerShown(
+  { onAfterMenuDismiss, disableAutoFocus, allowTextInput }: IDatePickerProps,
+  validateTextInput: () => void,
+) {
   const [isDatePickerShown, setIsDatePickerShown] = React.useState(false);
   const isInitialMount = useIsInitialMount();
+  const preventFocusOpeningPicker = React.useRef(false);
+
   React.useEffect(() => {
     if (!isInitialMount && !isDatePickerShown) {
       onAfterMenuDismiss?.();
     }
   }, [isDatePickerShown]);
 
-  return [isDatePickerShown, setIsDatePickerShown] as const;
+  const showCalendar = () => {
+    if (!isDatePickerShown) {
+      preventFocusOpeningPicker.current = true;
+      setIsDatePickerShown(true);
+    }
+  };
+
+  const hideCalendar = () => {
+    if (isDatePickerShown) {
+      setIsDatePickerShown(false);
+      validateTextInput();
+    }
+  };
+
+  const onCalendarDismiss = () => {
+    preventFocusOpeningPicker.current = true;
+    hideCalendar();
+  };
+
+  const onTextFieldFocus = () => {
+    if (disableAutoFocus) {
+      return;
+    }
+
+    if (!allowTextInput) {
+      if (!preventFocusOpeningPicker.current) {
+        showCalendar();
+      } else {
+        preventFocusOpeningPicker.current = false;
+      }
+    }
+  };
+
+  return [
+    isDatePickerShown,
+    setIsDatePickerShown,
+    showCalendar,
+    hideCalendar,
+    onCalendarDismiss,
+    onTextFieldFocus,
+  ] as const;
 }
 
 function useErrorMessage(
@@ -155,7 +200,6 @@ function useErrorMessage(
     minDate,
     maxDate,
   }: IDatePickerProps,
-  isDatePickerShown: boolean,
   selectedDate: Date | undefined,
   formattedDate: string,
   setDate: (date: Date | string | undefined) => void,
@@ -223,7 +267,7 @@ function useErrorMessage(
     }
   };
 
-  return [isDatePickerShown ? undefined : errorMessage, setErrorMessage, validateTextInput] as const;
+  return [errorMessage, setErrorMessage, validateTextInput] as const;
 }
 
 function isDateOutOfBounds(date: Date, minDate?: Date, maxDate?: Date): boolean {
@@ -235,14 +279,20 @@ export const DatePickerBase = React.forwardRef(
     const props = getPropsWithDefaults(DEFAULT_PROPS, propsWithoutDefaults);
     const id = useId('DatePicker', props.id);
     const [selectedDate, formattedDate, setDate] = useDateState(props);
-    const [isDatePickerShown, setIsDatePickerShown] = useIsDatePickerShown(props);
     const [errorMessage, setErrorMessage, validateTextInput] = useErrorMessage(
       props,
-      isDatePickerShown,
       selectedDate,
       formattedDate,
       setDate,
     );
+    const [
+      isDatePickerShown,
+      setIsDatePickerShown,
+      showCalendar,
+      hideCalendar,
+      onCalendarDismiss,
+      onTextFieldFocus,
+    ] = useIsDatePickerShown(props, validateTextInput);
 
     return (
       <DatePickerBaseClass
@@ -257,6 +307,10 @@ export const DatePickerBase = React.forwardRef(
           errorMessage,
           setErrorMessage,
           validateTextInput,
+          showCalendar,
+          hideCalendar,
+          onCalendarDismiss,
+          onTextFieldFocus,
         }}
       />
     );
@@ -275,6 +329,10 @@ type IDatePickerBaseClassProps = Omit<IDatePickerProps, 'value' | 'id'> & {
     errorMessage: string | undefined;
     setErrorMessage: (value: string | undefined) => void;
     validateTextInput: () => void;
+    showCalendar: () => void;
+    hideCalendar: () => void;
+    onCalendarDismiss: () => void;
+    onTextFieldFocus: () => void;
   };
 };
 
@@ -347,7 +405,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
             aria-controls={isDatePickerShown ? calloutId : undefined}
             required={isRequired}
             disabled={disabled}
-            errorMessage={this.props.hoisted.errorMessage}
+            errorMessage={this.props.hoisted.isDatePickerShown ? undefined : this.props.hoisted.errorMessage}
             placeholder={placeholder}
             borderless={borderless}
             value={formattedDate}
@@ -365,7 +423,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
               onClick: this._onIconClick,
             }}
             onKeyDown={this._onTextFieldKeyDown}
-            onFocus={this._onTextFieldFocus}
+            onFocus={this.props.hoisted.onTextFieldFocus}
             onBlur={this.props.hoisted.validateTextInput}
             onClick={this._onTextFieldClick}
             onChange={this._onTextFieldChanged}
@@ -383,7 +441,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
             directionalHint={DirectionalHint.bottomLeftEdge}
             {...calloutProps}
             className={css(classNames.callout, calloutProps && calloutProps.className)}
-            onDismiss={this._calendarDismissed}
+            onDismiss={this.props.hoisted.onCalendarDismiss}
             onPositioned={this._onCalloutPositioned}
           >
             <FocusTrapZone
@@ -394,7 +452,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
               <CalendarType
                 {...calendarProps}
                 onSelectDate={this._onSelectDate}
-                onDismiss={this._calendarDismissed}
+                onDismiss={this.props.hoisted.onCalendarDismiss}
                 isMonthPickerVisible={this.props.isMonthPickerVisible}
                 showMonthPickerAsOverlay={this.props.showMonthPickerAsOverlay}
                 today={this.props.today}
@@ -435,7 +493,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
 
     this.props.hoisted.setDate(date);
 
-    this._calendarDismissed();
+    this.props.hoisted.onCalendarDismiss();
   };
 
   private _onCalloutPositioned = (): void => {
@@ -451,20 +509,6 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
     }
   };
 
-  private _onTextFieldFocus = (ev: React.FocusEvent<HTMLElement>): void => {
-    if (this.props.disableAutoFocus) {
-      return;
-    }
-
-    if (!this.props.allowTextInput) {
-      if (!this._preventFocusOpeningPicker) {
-        this._showDatePickerPopup();
-      } else {
-        this._preventFocusOpeningPicker = false;
-      }
-    }
-  };
-
   private _onTextFieldChanged = (
     ev: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
     newValue: string,
@@ -473,7 +517,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
 
     if (allowTextInput) {
       if (this.props.hoisted.isDatePickerShown) {
-        this._dismissDatePickerPopup();
+        this.props.hoisted.hideCalendar();
       }
 
       const { isRequired, strings } = this.props;
@@ -494,12 +538,12 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
         ev.stopPropagation();
         if (!this.props.hoisted.isDatePickerShown) {
           this.props.hoisted.validateTextInput();
-          this._showDatePickerPopup();
+          this.props.hoisted.showCalendar();
         } else {
           // When DatePicker allows input date string directly,
           // it is expected to hit another enter to close the popup
           if (this.props.allowTextInput) {
-            this._dismissDatePickerPopup();
+            this.props.hoisted.hideCalendar();
           }
         }
         break;
@@ -515,50 +559,27 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
 
   private _onTextFieldClick = (ev: React.MouseEvent<HTMLElement>): void => {
     if (!this.props.disableAutoFocus && !this.props.hoisted.isDatePickerShown && !this.props.disabled) {
-      this._showDatePickerPopup();
+      this.props.hoisted.showCalendar();
       return;
     }
     if (this.props.allowTextInput) {
-      this._dismissDatePickerPopup();
+      this.props.hoisted.hideCalendar();
     }
   };
 
   private _onIconClick = (ev: React.MouseEvent<HTMLElement>): void => {
     ev.stopPropagation();
     if (!this.props.hoisted.isDatePickerShown && !this.props.disabled) {
-      this._showDatePickerPopup();
+      this.props.hoisted.showCalendar();
     } else if (this.props.allowTextInput) {
-      this._dismissDatePickerPopup();
+      this.props.hoisted.hideCalendar();
     }
-  };
-
-  private _showDatePickerPopup(): void {
-    if (!this.props.hoisted.isDatePickerShown) {
-      this._preventFocusOpeningPicker = true;
-      this.props.hoisted.setIsDatePickerShown(true);
-    }
-  }
-
-  private _dismissDatePickerPopup = (): void => {
-    if (this.props.hoisted.isDatePickerShown) {
-      this.props.hoisted.setIsDatePickerShown(false);
-      this.props.hoisted.validateTextInput();
-    }
-  };
-
-  /**
-   * Callback for closing the calendar callout
-   */
-  private _calendarDismissed = (): void => {
-    this._preventFocusOpeningPicker = true;
-    this._dismissDatePickerPopup();
-    // don't need to focus the text box, if necessary the focusTrapZone will do it
   };
 
   private _handleEscKey = (ev: React.KeyboardEvent<HTMLElement>): void => {
     if (this.props.hoisted.isDatePickerShown) {
       ev.stopPropagation();
     }
-    this._calendarDismissed();
+    this.props.hoisted.onCalendarDismiss();
   };
 }
