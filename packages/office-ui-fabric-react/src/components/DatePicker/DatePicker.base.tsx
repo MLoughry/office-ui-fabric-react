@@ -145,9 +145,20 @@ function useIsDatePickerShown({ onAfterMenuDismiss }: IDatePickerProps) {
 }
 
 function useErrorMessage(
-  { isRequired, strings, minDate, maxDate }: IDatePickerProps,
+  {
+    isRequired,
+    allowTextInput,
+    strings,
+    parseDateFromString,
+    onSelectDate,
+    formatDate,
+    minDate,
+    maxDate,
+  }: IDatePickerProps,
   isDatePickerShown: boolean,
   selectedDate: Date | undefined,
+  formattedDate: string,
+  setDate: (date: Date | string | undefined) => void,
 ) {
   const isInitialMount = useIsInitialMount();
   const [errorMessage, setErrorMessage] = React.useState<string | undefined>();
@@ -164,7 +175,55 @@ function useErrorMessage(
     }
   }
 
-  return [isDatePickerShown ? undefined : errorMessage, setErrorMessage] as const;
+  const validateTextInput = () => {
+    if (allowTextInput) {
+      let date = null;
+
+      if (formattedDate) {
+        // Don't parse if the selected date has the same formatted string as what we're about to parse.
+        // The formatted string might be ambiguous (ex: "1/2/3" or "New Year Eve") and the parser might
+        // not be able to come up with the exact same date.
+        if (selectedDate && !errorMessage && formatDate && formatDate(selectedDate) === formattedDate) {
+          return;
+        }
+        date = parseDateFromString!(formattedDate);
+
+        // Check if date is null, or date is Invalid Date
+        if (!date || isNaN(date.getTime())) {
+          // Reset invalid input field, if formatting is available
+          setDate(selectedDate);
+
+          setErrorMessage(strings!.invalidInputErrorMessage || ' ');
+        } else {
+          // Check against optional date boundaries
+          if (isDateOutOfBounds(date, minDate, maxDate)) {
+            setErrorMessage(strings!.isOutOfBoundsErrorMessage || ' ');
+          } else {
+            setErrorMessage('');
+            setDate(date);
+          }
+        }
+      } else {
+        // Only show error for empty formattedDate if it is a required field
+        setErrorMessage(isRequired ? strings!.isRequiredErrorMessage || ' ' : '');
+      }
+
+      // Execute onSelectDate callback
+      if (onSelectDate) {
+        // If no input date string or input date string is invalid
+        // date variable will be null, callback should expect null value for this case
+        onSelectDate(date);
+      }
+    } else if (isRequired && !formattedDate) {
+      // Check when DatePicker is a required field but has NO input value
+      setErrorMessage(strings!.isRequiredErrorMessage || ' ');
+    } else {
+      // Cleanup the error message
+      setErrorMessage('');
+    }
+  };
+
+  return [isDatePickerShown ? undefined : errorMessage, setErrorMessage, validateTextInput] as const;
 }
 
 function isDateOutOfBounds(date: Date, minDate?: Date, maxDate?: Date): boolean {
@@ -177,7 +236,13 @@ export const DatePickerBase = React.forwardRef(
     const id = useId('DatePicker', props.id);
     const [selectedDate, formattedDate, setDate] = useDateState(props);
     const [isDatePickerShown, setIsDatePickerShown] = useIsDatePickerShown(props);
-    const [errorMessage, setErrorMessage] = useErrorMessage(props, isDatePickerShown, selectedDate);
+    const [errorMessage, setErrorMessage, validateTextInput] = useErrorMessage(
+      props,
+      isDatePickerShown,
+      selectedDate,
+      formattedDate,
+      setDate,
+    );
 
     return (
       <DatePickerBaseClass
@@ -190,6 +255,7 @@ export const DatePickerBase = React.forwardRef(
         setIsDatePickerShown={setIsDatePickerShown}
         errorMessage={errorMessage}
         setErrorMessage={setErrorMessage}
+        validateTextInput={validateTextInput}
       />
     );
   },
@@ -205,6 +271,7 @@ type IDatePickerBaseClassProps = Omit<IDatePickerProps, 'value'> & {
   setIsDatePickerShown: (value: boolean) => void;
   errorMessage: string | undefined;
   setErrorMessage: (value: string | undefined) => void;
+  validateTextInput: () => void;
 };
 
 class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, never> implements IDatePicker {
@@ -297,7 +364,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
             }}
             onKeyDown={this._onTextFieldKeyDown}
             onFocus={this._onTextFieldFocus}
-            onBlur={this._onTextFieldBlur}
+            onBlur={this.props.validateTextInput}
             onClick={this._onTextFieldClick}
             onChange={this._onTextFieldChanged}
           />
@@ -352,9 +419,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
   }
 
   public focus(): void {
-    if (this._textField.current) {
-      this._textField.current.focus();
-    }
+    this._textField.current?.focus();
   }
 
   public reset(): void {
@@ -379,8 +444,8 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
     if (this.props.calloutProps && this.props.calloutProps.setInitialFocus !== undefined) {
       shouldFocus = this.props.calloutProps.setInitialFocus;
     }
-    if (this._calendar.current && shouldFocus) {
-      this._calendar.current.focus();
+    if (shouldFocus) {
+      this._calendar.current?.focus();
     }
   };
 
@@ -396,10 +461,6 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
         this._preventFocusOpeningPicker = false;
       }
     }
-  };
-
-  private _onTextFieldBlur = (ev: React.FocusEvent<HTMLElement>): void => {
-    this._validateTextInput();
   };
 
   private _onTextFieldChanged = (
@@ -430,7 +491,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
         ev.preventDefault();
         ev.stopPropagation();
         if (!this.props.isDatePickerShown) {
-          this._validateTextInput();
+          this.props.validateTextInput();
           this._showDatePickerPopup();
         } else {
           // When DatePicker allows input date string directly,
@@ -479,7 +540,7 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
   private _dismissDatePickerPopup = (): void => {
     if (this.props.isDatePickerShown) {
       this.props.setIsDatePickerShown(false);
-      this._validateTextInput(true);
+      this.props.validateTextInput();
     }
   };
 
@@ -497,70 +558,5 @@ class DatePickerBaseClass extends React.Component<IDatePickerBaseClassProps, nev
       ev.stopPropagation();
     }
     this._calendarDismissed();
-  };
-
-  private _validateTextInput = (forceValidation?: boolean): void => {
-    const {
-      isRequired,
-      allowTextInput,
-      strings,
-      parseDateFromString,
-      onSelectDate,
-      formatDate,
-      minDate,
-      maxDate,
-    } = this.props;
-    const inputValue = this.props.formattedDate;
-
-    if (allowTextInput) {
-      let date = null;
-
-      if (inputValue) {
-        // Don't parse if the selected date has the same formatted string as what we're about to parse.
-        // The formatted string might be ambiguous (ex: "1/2/3" or "New Year Eve") and the parser might
-        // not be able to come up with the exact same date.
-        if (
-          this.props.selectedDate &&
-          !this.props.errorMessage &&
-          formatDate &&
-          formatDate(this.props.selectedDate) === inputValue
-        ) {
-          return;
-        }
-        date = parseDateFromString!(inputValue);
-
-        // Check if date is null, or date is Invalid Date
-        if (!date || isNaN(date.getTime())) {
-          // Reset invalid input field, if formatting is available
-          this.props.setDate(this.props.selectedDate);
-
-          this.props.setErrorMessage(strings!.invalidInputErrorMessage || ' ');
-        } else {
-          // Check against optional date boundaries
-          if (isDateOutOfBounds(date, minDate, maxDate)) {
-            this.props.setErrorMessage(strings!.isOutOfBoundsErrorMessage || ' ');
-          } else {
-            this.props.setErrorMessage('');
-            this.props.setDate(date);
-          }
-        }
-      } else {
-        // Only show error for empty inputValue if it is a required field
-        this.props.setErrorMessage(isRequired ? strings!.isRequiredErrorMessage || ' ' : '');
-      }
-
-      // Execute onSelectDate callback
-      if (onSelectDate) {
-        // If no input date string or input date string is invalid
-        // date variable will be null, callback should expect null value for this case
-        onSelectDate(date);
-      }
-    } else if (isRequired && !inputValue) {
-      // Check when DatePicker is a required field but has NO input value
-      this.props.setErrorMessage(strings!.isRequiredErrorMessage || ' ');
-    } else {
-      // Cleanup the error message
-      this.props.setErrorMessage('');
-    }
   };
 }
