@@ -14,7 +14,7 @@ import { FirstWeekOfYear } from '../../utilities/dateValues/DateValues';
 import { Callout } from '../../Callout';
 import { DirectionalHint } from '../../common/DirectionalHint';
 import { TextField, ITextField } from '../../TextField';
-import { compareDatePart, compareDates } from '../../utilities/dateMath/DateMath';
+import { compareDatePart } from '../../utilities/dateMath/DateMath';
 import { FocusTrapZone } from '../../FocusTrapZone';
 import { useId, useControllableValue } from '@uifabric/react-hooks';
 
@@ -140,9 +140,14 @@ function useDatePickerVisibilityState(
   const hideCalendar = () => {
     if (isDatePickerShown) {
       setIsDatePickerShown(false);
-      validateTextInput();
     }
   };
+
+  React.useLayoutEffect(() => {
+    if (!isDatePickerShown && !isInitialMount) {
+      validateTextInput();
+    }
+  }, [isDatePickerShown]);
 
   const onCalendarDismiss = () => {
     preventFocusOpeningPicker.current = true;

@@ -6,7 +6,7 @@ import { DatePicker } from './DatePicker';
 import { DatePickerBase } from './DatePicker.base';
 import { IDatePickerStrings } from './DatePicker.types';
 import { FirstWeekOfYear } from 'office-ui-fabric-react/lib/utilities/dateValues/DateValues';
-import { shallow, mount, ReactWrapper } from 'enzyme';
+import { mount, ReactWrapper } from 'enzyme';
 import { resetIds, KeyCodes } from 'office-ui-fabric-react/lib/Utilities';
 import { Callout } from 'office-ui-fabric-react/lib/Callout';
 import { PrimaryButton } from 'office-ui-fabric-react/lib/Button';
@@ -144,7 +144,7 @@ describe('DatePicker', () => {
     jest.useRealTimers();
   });
 
-  xit('clears error message when required input has date selected from calendar and allowTextInput is true', () => {
+  it('clears error message when required input has date selected from calendar and allowTextInput is true', () => {
     jest.useFakeTimers();
     const datePicker = mount(<DatePickerBase isRequired={true} allowTextInput={true} strings={DayPickerStrings} />);
     const textField = datePicker.find('input');
