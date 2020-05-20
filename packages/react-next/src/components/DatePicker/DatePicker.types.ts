@@ -1,10 +1,7 @@
 import * as React from 'react';
 import { DayOfWeek, ICalendarProps } from '../../Calendar';
 import { FirstWeekOfYear } from 'office-ui-fabric-react/lib/utilities/dateValues/DateValues';
-import {
-  ICalendarFormatDateCallbacks,
-  ICalendarStrings,
-} from 'office-ui-fabric-react/lib/components/Calendar/Calendar.types';
+import { ICalendarFormatDateCallbacks, ICalendarStrings } from '../../Calendar';
 import { IStyle, ITheme } from '../../Styling';
 import { IRefObject, IBaseProps, IStyleFunctionOrObject, IComponentAs } from '../../Utilities';
 import { ICalloutProps } from 'office-ui-fabric-react/lib/components/Callout/Callout.types';
