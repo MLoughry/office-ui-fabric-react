@@ -413,6 +413,7 @@ export const DatePickerBase = React.forwardRef(
 
     const onSelectDate = (date: Date): void => {
       props.calendarProps?.onSelectDate?.(date);
+      props.onSelectDate?.(date);
       setDate(date);
       onCalendarDismiss();
     };

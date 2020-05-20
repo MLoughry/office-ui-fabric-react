@@ -63,27 +63,26 @@ describe('DatePicker', () => {
     expect(wrapper.getElement().props.id).toEqual('foo');
   });
 
-  xit('should not open DatePicker when disabled, no label', () => {
+  it('should not open DatePicker when disabled, no label', () => {
     const wrapper = mount(<DatePickerBase disabled />);
     wrapper.find('i').simulate('click');
 
-    expect(wrapper.state('isDatePickerShown')).toBe(false);
+    expect(wrapper.find('[role="dialog"]').length).toBe(0);
   });
 
   // if isDatePickerShown is not set, the DatePicker should not
   // be rendered and therefore aria-owns should not exist
-  xit('should not render DatePicker when isDatePickerShown is not set', () => {
+  it('should not render DatePicker when isDatePickerShown is not set', () => {
     const datePicker = mount(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: false });
 
-    expect(datePicker.getDOMNode().getAttribute('aria-owns')).toBeNull();
+    expect(datePicker.find('[aria-owns]').length).toBe(0);
   });
 
   // if isDatePickerShown is set, the DatePicker should be rendered
   // and aria-owns should exist
-  xit('should render DatePicker when isDatePickerShown is set', () => {
+  it('should render DatePicker when isDatePickerShown is set', () => {
     const datePicker = mount(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+    datePicker.find('i').simulate('click');
 
     expect(
       datePicker
@@ -91,15 +90,13 @@ describe('DatePicker', () => {
         .getDOMNode()
         .getAttribute('aria-owns'),
     ).toBeDefined();
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   // if isDatePickerShown is set, the DatePicker should be rendered
   // and the calloutId should exist in the DOM
-  xit('should render DatePicker and calloutId must exist in the DOM when isDatePickerShown is set', () => {
+  it('should render DatePicker and calloutId must exist in the DOM when isDatePickerShown is set', () => {
     const datePicker = mount(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+    datePicker.find('i').simulate('click');
 
     const calloutId = datePicker
       .find('[aria-owns]')
@@ -107,14 +104,13 @@ describe('DatePicker', () => {
       .getAttribute('aria-owns');
 
     expect(datePicker.find(`#${calloutId}`).exists()).toBe(true);
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
-  xit('should not open DatePicker when disabled, with label', () => {
+  it('should not open DatePicker when disabled, with label', () => {
     const wrapper = mount(<DatePickerBase disabled label="label" />);
     wrapper.find('i').simulate('click');
-    expect(wrapper.state('isDatePickerShown')).toBe(false);
+
+    expect(wrapper.find('[aria-owns]').length).toBe(0);
   });
 
   it('should call onSelectDate even when required input is empty when allowTextInput is true', () => {
