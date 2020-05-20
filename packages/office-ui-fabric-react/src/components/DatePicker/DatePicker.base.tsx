@@ -14,9 +14,9 @@ import { FirstWeekOfYear } from '../../utilities/dateValues/DateValues';
 import { Callout } from '../../Callout';
 import { DirectionalHint } from '../../common/DirectionalHint';
 import { TextField, ITextField } from '../../TextField';
-import { compareDatePart } from '../../utilities/dateMath/DateMath';
+import { compareDatePart, compareDates } from '../../utilities/dateMath/DateMath';
 import { FocusTrapZone } from '../../FocusTrapZone';
-import { useId } from '@uifabric/react-hooks';
+import { useId, useControllableValue } from '@uifabric/react-hooks';
 
 const getClassNames = classNamesFunction<IDatePickerStyleProps, IDatePickerStyles>();
 
@@ -86,7 +86,7 @@ const DEFAULT_PROPS: IDatePickerProps = {
 };
 
 function useDateState({ formatDate, value }: IDatePickerProps) {
-  const [selectedDate, setSelectedDate] = React.useState(value);
+  const [selectedDate, setSelectedDate] = useControllableValue(value, undefined);
   const [formattedDate, setFormattedDate] = React.useState(() => formatDate?.(selectedDate) || '');
   const setDate = (date: Date | string | undefined): void => {
     if (typeof date === 'string') {
@@ -102,14 +102,7 @@ function useDateState({ formatDate, value }: IDatePickerProps) {
     if (formattedDate !== newFormattedDate) {
       setFormattedDate(newFormattedDate);
     }
-  }, [
-    // Issue# 1274: Check if the date value changed from old value, i.e., if indeed a new date is being
-    // passed in or if the formatting function was modified. We only update the selected date if either of these
-    // had a legit change. Note tha the bug will still repro when only the formatDate was passed in props and this
-    // is the result of the onSelectDate callback, but this should be a rare scenario.
-    selectedDate?.getTime(),
-    formatDate,
-  ]);
+  }, [selectedDate?.getTime(), formatDate]);
 
   return [selectedDate, formattedDate, setDate] as const;
 }
