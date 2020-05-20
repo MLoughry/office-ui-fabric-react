@@ -16,7 +16,7 @@ import { DirectionalHint } from '../../common/DirectionalHint';
 import { TextField, ITextField } from '../../TextField';
 import { compareDatePart } from '../../utilities/dateMath/DateMath';
 import { FocusTrapZone } from '../../FocusTrapZone';
-import { useId, useControllableValue } from '@uifabric/react-hooks';
+import { useId } from '@uifabric/react-hooks';
 
 const getClassNames = classNamesFunction<IDatePickerStyleProps, IDatePickerStyles>();
 
@@ -85,10 +85,8 @@ const DEFAULT_PROPS: IDatePickerProps = {
   allFocusable: false,
 };
 
-function useDateState({ formatDate, onSelectDate, value, initialPickerDate }: IDatePickerProps) {
-  const [selectedDate, setSelectedDate] = useControllableValue(value, initialPickerDate, (ev, date) =>
-    onSelectDate?.(date),
-  );
+function useDateState({ formatDate, value }: IDatePickerProps) {
+  const [selectedDate, setSelectedDate] = React.useState(value);
   const [formattedDate, setFormattedDate] = React.useState(() => formatDate?.(selectedDate) || '');
   const setDate = (date: Date | string | undefined): void => {
     if (typeof date === 'string') {
@@ -296,11 +294,9 @@ function useErrorMessage(
       }
 
       // Execute onSelectDate callback
-      if (onSelectDate) {
-        // If no input date string or input date string is invalid
-        // date variable will be null, callback should expect null value for this case
-        onSelectDate(date);
-      }
+      // If no input date string or input date string is invalid
+      // date variable will be null, callback should expect null value for this case
+      onSelectDate?.(date);
     } else if (isRequired && !formattedDate) {
       // Check when DatePicker is a required field but has NO input value
       setErrorMessage(strings!.isRequiredErrorMessage || ' ');
