@@ -319,9 +319,9 @@ describe('DatePicker', () => {
     datePicker.unmount();
   });
 
-  xdescribe('when Calendar properties are not specified', () => {
-    const datePicker = shallow(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+  describe('when Calendar properties are not specified', () => {
+    const datePicker = mount(<DatePickerBase />);
+    datePicker.find('i').simulate('click');
     const calendarProps = datePicker.find(Calendar).props();
 
     it('renders Calendar with isMonthPickerVisible as true by defaut', () => {
@@ -347,11 +347,9 @@ describe('DatePicker', () => {
     it('renders Calendar with showGoToToday as true by defaut', () => {
       expect(calendarProps.showGoToToday).toBe(true);
     });
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
-  xdescribe('when Calendar properties are specified', () => {
+  describe('when Calendar properties are specified', () => {
     const value = new Date(2017, 10, 1);
     const today = new Date(2017, 9, 31);
     const dateTimeFormatter = {
@@ -361,7 +359,7 @@ describe('DatePicker', () => {
       formatYear: (date: Date) => 'y',
     };
 
-    const datePicker = shallow(
+    const datePicker = mount(
       <DatePickerBase
         isMonthPickerVisible={false}
         showMonthPickerAsOverlay={true}
@@ -375,7 +373,7 @@ describe('DatePicker', () => {
         dateTimeFormatter={dateTimeFormatter}
       />,
     );
-    datePicker.setState({ isDatePickerShown: true });
+    datePicker.find('i').simulate('click');
 
     const calendarProps = datePicker.find(Calendar).props();
 
@@ -418,8 +416,6 @@ describe('DatePicker', () => {
     it('renders Calendar with same dateTimeFormatter', () => {
       expect(calendarProps.dateTimeFormatter).toBe(dateTimeFormatter);
     });
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   describe('when date boundaries are specified', () => {
