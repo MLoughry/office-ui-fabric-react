@@ -52,14 +52,14 @@ const desc = 'This field is required. One of the support input formats is year d
 const firstDayOfWeek = DayOfWeek.Sunday;
 
 export const DatePickerFormatExample: React.FC = () => {
-  const [value, setValue] = React.useState<Date | null | undefined>(null);
+  const [value, setValue] = React.useState<Date | undefined>();
 
-  const onSelectDate = (date: Date | null | undefined): void => {
+  const onSelectDate = (date: Date | undefined): void => {
     setValue(date);
   };
 
   const onClick = (): void => {
-    setValue(null);
+    setValue(undefined);
   };
 
   const onParseDateFromString = (val: string): Date => {

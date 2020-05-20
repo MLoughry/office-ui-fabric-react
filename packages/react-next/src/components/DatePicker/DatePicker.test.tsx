@@ -1,12 +1,11 @@
 import * as React from 'react';
-import * as ReactTestUtils from 'react-dom/test-utils';
 import * as renderer from 'react-test-renderer';
 import { Calendar, ICalendarStrings } from '../../Calendar';
 import { DatePicker } from './DatePicker';
 import { DatePickerBase } from './DatePicker.base';
 import { IDatePickerStrings } from './DatePicker.types';
 import { FirstWeekOfYear } from 'office-ui-fabric-react/lib/utilities/dateValues/DateValues';
-import { shallow, mount, ReactWrapper } from 'enzyme';
+import { mount, ReactWrapper } from 'enzyme';
 import { resetIds, KeyCodes } from 'office-ui-fabric-react/lib/Utilities';
 import { Callout } from 'office-ui-fabric-react/lib/Callout';
 import { PrimaryButton } from 'office-ui-fabric-react/lib/Button';
@@ -67,23 +66,22 @@ describe('DatePicker', () => {
     const wrapper = mount(<DatePickerBase disabled />);
     wrapper.find('i').simulate('click');
 
-    expect(wrapper.state('isDatePickerShown')).toBe(false);
+    expect(wrapper.find('[role="dialog"]').length).toBe(0);
   });
 
   // if isDatePickerShown is not set, the DatePicker should not
   // be rendered and therefore aria-owns should not exist
   it('should not render DatePicker when isDatePickerShown is not set', () => {
     const datePicker = mount(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: false });
 
-    expect(datePicker.getDOMNode().getAttribute('aria-owns')).toBeNull();
+    expect(datePicker.find('[aria-owns]').length).toBe(0);
   });
 
   // if isDatePickerShown is set, the DatePicker should be rendered
   // and aria-owns should exist
   it('should render DatePicker when isDatePickerShown is set', () => {
     const datePicker = mount(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+    datePicker.find('i').simulate('click');
 
     expect(
       datePicker
@@ -91,15 +89,13 @@ describe('DatePicker', () => {
         .getDOMNode()
         .getAttribute('aria-owns'),
     ).toBeDefined();
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   // if isDatePickerShown is set, the DatePicker should be rendered
   // and the calloutId should exist in the DOM
   it('should render DatePicker and calloutId must exist in the DOM when isDatePickerShown is set', () => {
     const datePicker = mount(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+    datePicker.find('i').simulate('click');
 
     const calloutId = datePicker
       .find('[aria-owns]')
@@ -107,14 +103,13 @@ describe('DatePicker', () => {
       .getAttribute('aria-owns');
 
     expect(datePicker.find(`#${calloutId}`).exists()).toBe(true);
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   it('should not open DatePicker when disabled, with label', () => {
     const wrapper = mount(<DatePickerBase disabled label="label" />);
     wrapper.find('i').simulate('click');
-    expect(wrapper.state('isDatePickerShown')).toBe(false);
+
+    expect(wrapper.find('[aria-owns]').length).toBe(0);
   });
 
   it('should call onSelectDate even when required input is empty when allowTextInput is true', () => {
@@ -133,39 +128,44 @@ describe('DatePicker', () => {
   });
 
   it('clears error message when required input has date text and allowTextInput is true', () => {
+    jest.useFakeTimers();
     const datePicker = mount(<DatePickerBase isRequired={true} allowTextInput={true} strings={DayPickerStrings} />);
     const textField = datePicker.find('input');
     expect(textField).toBeDefined();
-    expect(datePicker.state('errorMessage')).toBeUndefined();
+    expect(getRenderedErrorMessage(datePicker)).toBeUndefined();
 
     textField.simulate('click').simulate('click'); // open the datepicker then dismiss
-    expect(datePicker.state('errorMessage')).toBe(DayPickerStrings.isRequiredErrorMessage);
+    expect(getRenderedErrorMessage(datePicker)).toBe(DayPickerStrings.isRequiredErrorMessage);
     textField.simulate('change', { target: { value: 'Jan 1 2030' } }).simulate('blur');
-    expect(datePicker.state('errorMessage')).toBe('');
+    expect(getRenderedErrorMessage(datePicker)).toBeFalsy();
 
     datePicker.unmount();
+    jest.useRealTimers();
   });
 
   it('clears error message when required input has date selected from calendar and allowTextInput is true', () => {
+    jest.useFakeTimers();
     const datePicker = mount(<DatePickerBase isRequired={true} allowTextInput={true} strings={DayPickerStrings} />);
     const textField = datePicker.find('input');
     expect(textField).toBeDefined();
-    expect(datePicker.state('errorMessage')).toBeUndefined();
+    expect(getRenderedErrorMessage(datePicker)).toBeUndefined();
 
     textField.simulate('click').simulate('click'); // open the datepicker then dismiss
-    expect(datePicker.state('errorMessage')).toBe(DayPickerStrings.isRequiredErrorMessage);
+    expect(getRenderedErrorMessage(datePicker)).toBe(DayPickerStrings.isRequiredErrorMessage);
 
     // open calendar and select first day
     textField.simulate('click');
     const selectableDateInCalender = datePicker.find('.ms-DatePicker td button[data-is-focusable=true]').at(0);
     selectableDateInCalender.simulate('click');
 
-    expect(datePicker.state('errorMessage')).toBe('');
+    expect(getRenderedErrorMessage(datePicker)).toBeFalsy();
 
     datePicker.unmount();
+    jest.useRealTimers();
   });
 
   it('should not clear initial error when datepicker is opened', () => {
+    jest.useFakeTimers();
     const datePicker = mount(
       <DatePickerBase
         isRequired={true}
@@ -176,7 +176,7 @@ describe('DatePicker', () => {
     );
 
     // assert initial error exists
-    expect(datePicker.state('errorMessage')).not.toBe('');
+    expect(getRenderedErrorMessage(datePicker)).toBeTruthy();
 
     const textField = datePicker.find('input');
 
@@ -186,9 +186,10 @@ describe('DatePicker', () => {
     textField.simulate('click').simulate('click');
 
     // assert initial error remains
-    expect(datePicker.state('errorMessage')).not.toBe('');
+    expect(getRenderedErrorMessage(datePicker)).toBeTruthy();
 
     datePicker.unmount();
+    jest.useRealTimers();
   });
 
   it('should call custom onChange when allowTextInput is true', () => {
@@ -206,29 +207,25 @@ describe('DatePicker', () => {
     datePicker.unmount();
   });
 
-  // @todo: usage of document.querySelector is incorrectly testing DOM mounted by previous tests and needs to be fixed.
   it('should call onSelectDate only once when allowTextInput is true and popup is used to select the value', () => {
     const onSelectDate = jest.fn();
     const datePicker = mount(<DatePickerBase allowTextInput={true} onSelectDate={onSelectDate} />);
 
-    datePicker.setState({ isDatePickerShown: true });
-    ReactTestUtils.Simulate.click(document.querySelector('.ms-DatePicker-day--today') as HTMLButtonElement);
+    datePicker.find('i').simulate('click');
+    datePicker.find('.ms-DatePicker-day--today').simulate('click');
 
     expect(onSelectDate).toHaveBeenCalledTimes(1);
-
-    datePicker.setState({ isDatePickerShown: false });
 
     datePicker.unmount();
   });
 
   it('should set "Calendar" as the Callout\'s aria-label', () => {
-    const datePicker = shallow(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+    const datePicker = mount(<DatePickerBase />);
+    datePicker.find('i').simulate('click');
+
     const calloutProps = datePicker.find(Callout).props();
 
     expect(calloutProps.ariaLabel).toBe('Calendar');
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   it('should close parent Callout if Esc is pressed', () => {
@@ -267,9 +264,8 @@ describe('DatePicker', () => {
       <DatePickerBase allowTextInput={true} today={today} initialPickerDate={initiallySelectedDate} />,
     );
 
-    datePicker.setState({ isDatePickerShown: true });
-    const todayButton = document.querySelector('.ms-DatePicker-day--today') as HTMLButtonElement;
-    ReactTestUtils.Simulate.click(todayButton);
+    datePicker.find('i').simulate('click');
+    datePicker.find('.ms-DatePicker-day--today').simulate('click');
 
     const selectedDate = datePicker
       .find('input')
@@ -279,16 +275,14 @@ describe('DatePicker', () => {
 
     expect(selectedDate).toEqual('Wed Jan 15 2020');
 
-    datePicker.setState({ isDatePickerShown: false });
-
     datePicker.unmount();
   });
 
   it('reflects the correct date in the input field when selecting a value and a different format is given', () => {
     const today = new Date('January 15, 2020');
     const initiallySelectedDate = new Date('January 10, 2020');
-    const onFormatDate = (date: Date): string => {
-      return date.getDate() + '/' + (date.getMonth() + 1) + '/' + (date.getFullYear() % 100);
+    const onFormatDate = (date: Date | undefined): string => {
+      return date ? date.getDate() + '/' + (date.getMonth() + 1) + '/' + (date.getFullYear() % 100) : '';
     };
     // initialPickerDate defaults to Date.now() if not provided so it must be given to ensure
     // that the datepicker opens on the correct month
@@ -301,9 +295,8 @@ describe('DatePicker', () => {
       />,
     );
 
-    datePicker.setState({ isDatePickerShown: true });
-    const todayButton = document.querySelector('.ms-DatePicker-day--today') as HTMLButtonElement;
-    ReactTestUtils.Simulate.click(todayButton);
+    datePicker.find('i').simulate('click');
+    datePicker.find('.ms-DatePicker-day--today').simulate('click');
 
     const selectedDate = datePicker
       .find('input')
@@ -313,14 +306,12 @@ describe('DatePicker', () => {
 
     expect(selectedDate).toEqual('15/1/20');
 
-    datePicker.setState({ isDatePickerShown: false });
-
     datePicker.unmount();
   });
 
   describe('when Calendar properties are not specified', () => {
-    const datePicker = shallow(<DatePickerBase />);
-    datePicker.setState({ isDatePickerShown: true });
+    const datePicker = mount(<DatePickerBase />);
+    datePicker.find('i').simulate('click');
     const calendarProps = datePicker.find(Calendar).props();
 
     it('renders Calendar with isMonthPickerVisible as true by defaut', () => {
@@ -346,8 +337,6 @@ describe('DatePicker', () => {
     it('renders Calendar with showGoToToday as true by defaut', () => {
       expect(calendarProps.showGoToToday).toBe(true);
     });
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   describe('when Calendar properties are specified', () => {
@@ -360,7 +349,7 @@ describe('DatePicker', () => {
       formatYear: (date: Date) => 'y',
     };
 
-    const datePicker = shallow(
+    const datePicker = mount(
       <DatePickerBase
         isMonthPickerVisible={false}
         showMonthPickerAsOverlay={true}
@@ -374,7 +363,7 @@ describe('DatePicker', () => {
         dateTimeFormatter={dateTimeFormatter}
       />,
     );
-    datePicker.setState({ isDatePickerShown: true });
+    datePicker.find('i').simulate('click');
 
     const calendarProps = datePicker.find(Calendar).props();
 
@@ -417,8 +406,6 @@ describe('DatePicker', () => {
     it('renders Calendar with same dateTimeFormatter', () => {
       expect(calendarProps.dateTimeFormatter).toBe(dateTimeFormatter);
     });
-
-    datePicker.setState({ isDatePickerShown: false });
   });
 
   describe('when date boundaries are specified', () => {
@@ -449,6 +436,7 @@ describe('DatePicker', () => {
     let datePicker: ReactWrapper<any, any>;
 
     beforeEach(() => {
+      jest.useFakeTimers();
       datePicker = mount(
         <DatePickerBase
           allowTextInput={true}
@@ -462,6 +450,7 @@ describe('DatePicker', () => {
 
     afterEach(() => {
       datePicker.unmount();
+      jest.useRealTimers();
     });
 
     it('should throw validation error for date outside boundary', () => {
@@ -470,14 +459,14 @@ describe('DatePicker', () => {
         .find('input')
         .simulate('change', { target: { value: 'Jan 1 2010' } })
         .simulate('blur');
-      expect(datePicker.state('errorMessage')).toBe('out of bounds');
+      expect(getRenderedErrorMessage(datePicker)).toBe('out of bounds');
 
       // after maxDate
       datePicker
         .find('input')
         .simulate('change', { target: { value: 'Jan 1 2020' } })
         .simulate('blur');
-      expect(datePicker.state('errorMessage')).toBe('out of bounds');
+      expect(getRenderedErrorMessage(datePicker)).toBe('out of bounds');
     });
 
     it('should not throw validation error for date inside boundary', () => {
@@ -486,19 +475,26 @@ describe('DatePicker', () => {
         .find('input')
         .simulate('change', { target: { value: 'Dec 16 2017' } })
         .simulate('blur');
-      expect(datePicker.state('errorMessage')).toBeFalsy();
+      expect(getRenderedErrorMessage(datePicker)).toBeFalsy();
 
       // on boundary
       datePicker
         .find('input')
         .simulate('change', { target: { value: 'Jan 1 2017' } })
         .simulate('blur');
-      expect(datePicker.state('errorMessage')).toBeFalsy();
+      expect(getRenderedErrorMessage(datePicker)).toBeFalsy();
     });
 
     it('should throw validation error if boundaries are moved to intersect selected date', () => {
       datePicker.setProps({ minDate: new Date('Dec 16 2017') });
-      expect(datePicker.state('errorMessage')).toBe('out of bounds');
+      expect(getRenderedErrorMessage(datePicker)).toBe('out of bounds');
     });
   });
 });
+
+function getRenderedErrorMessage(wrapper: ReactWrapper) {
+  // Allow <DelayedRender> in TextField to render the error message
+  jest.runAllTimers();
+
+  return wrapper.getDOMNode().querySelector('[data-automation-id="error-message"]')?.innerHTML;
+}

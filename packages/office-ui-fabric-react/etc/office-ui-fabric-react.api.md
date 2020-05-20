@@ -787,7 +787,21 @@ export function cssColor(color?: string): IRGB | undefined;
 export const DatePicker: React.FunctionComponent<IDatePickerProps>;
 
 // @public (undocumented)
-export const DatePickerBase: React.ForwardRefExoticComponent<IDatePickerProps & React.RefAttributes<unknown>>;
+export class DatePickerBase extends React.Component<IDatePickerProps, IDatePickerState> implements IDatePicker {
+    constructor(props: IDatePickerProps);
+    // (undocumented)
+    componentDidUpdate(prevProps: IDatePickerProps, prevState: IDatePickerState): void;
+    // (undocumented)
+    static defaultProps: IDatePickerProps;
+    // (undocumented)
+    focus(): void;
+    // (undocumented)
+    render(): JSX.Element;
+    // (undocumented)
+    reset(): void;
+    // (undocumented)
+    UNSAFE_componentWillReceiveProps(nextProps: IDatePickerProps): void;
+    }
 
 // @public
 export enum DateRangeType {
