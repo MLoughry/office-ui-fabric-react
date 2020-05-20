@@ -208,17 +208,14 @@ describe('DatePicker', () => {
     datePicker.unmount();
   });
 
-  // @todo: usage of document.querySelector is incorrectly testing DOM mounted by previous tests and needs to be fixed.
-  xit('should call onSelectDate only once when allowTextInput is true and popup is used to select the value', () => {
+  it('should call onSelectDate only once when allowTextInput is true and popup is used to select the value', () => {
     const onSelectDate = jest.fn();
     const datePicker = mount(<DatePickerBase allowTextInput={true} onSelectDate={onSelectDate} />);
 
-    datePicker.setState({ isDatePickerShown: true });
-    ReactTestUtils.Simulate.click(document.querySelector('.ms-DatePicker-day--today') as HTMLButtonElement);
+    datePicker.find('i').simulate('click');
+    datePicker.find('.ms-DatePicker-day--today').simulate('click');
 
     expect(onSelectDate).toHaveBeenCalledTimes(1);
-
-    datePicker.setState({ isDatePickerShown: false });
 
     datePicker.unmount();
   });
@@ -259,7 +256,7 @@ describe('DatePicker', () => {
     expect(callout.exists()).toBe(false);
   });
 
-  xit('should reflect the correct date in the input field when selecting a value', () => {
+  it('should reflect the correct date in the input field when selecting a value', () => {
     const today = new Date('January 15, 2020');
     const initiallySelectedDate = new Date('January 10, 2020');
     // initialPickerDate defaults to Date.now() if not provided so it must be given to ensure
@@ -268,9 +265,8 @@ describe('DatePicker', () => {
       <DatePickerBase allowTextInput={true} today={today} initialPickerDate={initiallySelectedDate} />,
     );
 
-    datePicker.setState({ isDatePickerShown: true });
-    const todayButton = document.querySelector('.ms-DatePicker-day--today') as HTMLButtonElement;
-    ReactTestUtils.Simulate.click(todayButton);
+    datePicker.find('i').simulate('click');
+    datePicker.find('.ms-DatePicker-day--today').simulate('click');
 
     const selectedDate = datePicker
       .find('input')
@@ -280,16 +276,14 @@ describe('DatePicker', () => {
 
     expect(selectedDate).toEqual('Wed Jan 15 2020');
 
-    datePicker.setState({ isDatePickerShown: false });
-
     datePicker.unmount();
   });
 
-  xit('reflects the correct date in the input field when selecting a value and a different format is given', () => {
+  it('reflects the correct date in the input field when selecting a value and a different format is given', () => {
     const today = new Date('January 15, 2020');
     const initiallySelectedDate = new Date('January 10, 2020');
-    const onFormatDate = (date: Date): string => {
-      return date.getDate() + '/' + (date.getMonth() + 1) + '/' + (date.getFullYear() % 100);
+    const onFormatDate = (date: Date | undefined): string => {
+      return date ? date.getDate() + '/' + (date.getMonth() + 1) + '/' + (date.getFullYear() % 100) : '';
     };
     // initialPickerDate defaults to Date.now() if not provided so it must be given to ensure
     // that the datepicker opens on the correct month
@@ -302,9 +296,8 @@ describe('DatePicker', () => {
       />,
     );
 
-    datePicker.setState({ isDatePickerShown: true });
-    const todayButton = document.querySelector('.ms-DatePicker-day--today') as HTMLButtonElement;
-    ReactTestUtils.Simulate.click(todayButton);
+    datePicker.find('i').simulate('click');
+    datePicker.find('.ms-DatePicker-day--today').simulate('click');
 
     const selectedDate = datePicker
       .find('input')
@@ -313,8 +306,6 @@ describe('DatePicker', () => {
       .getAttribute('value');
 
     expect(selectedDate).toEqual('15/1/20');
-
-    datePicker.setState({ isDatePickerShown: false });
 
     datePicker.unmount();
   });
