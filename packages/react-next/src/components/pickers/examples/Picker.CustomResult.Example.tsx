@@ -324,8 +324,6 @@ const SelectedDocumentItem: (documentProps: IPickerItemProps<IFullDocumentCardPr
   );
 };
 
-class DocumentPicker extends BasePickerListBelow<IFullDocumentCardProps, IDocumentPickerProps> {}
-
 const checkboxStyles: Partial<ICheckboxStyles> = { root: { margin: '10px 0' } };
 
 export class PickerCustomResultExample extends React.Component<{}, IPeoplePickerExampleState> {
@@ -346,7 +344,7 @@ export class PickerCustomResultExample extends React.Component<{}, IPeoplePicker
           checked={this.state.isPickerDisabled}
           onChange={this._onDisabledButtonClick}
         />
-        <DocumentPicker
+        <BasePickerListBelow<IFullDocumentCardProps, IDocumentPickerProps>
           removeButtonAriaLabel="Remove"
           onRenderSuggestionsItem={SuggestedBigItem}
           onResolveSuggestions={this._onFilterChanged}

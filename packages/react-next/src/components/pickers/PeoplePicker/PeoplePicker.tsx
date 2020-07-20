@@ -15,6 +15,7 @@ import { PeoplePickerItemSuggestion } from './PeoplePickerItems/PeoplePickerItem
 import { IPeoplePickerItemSelectedProps } from './PeoplePickerItems/PeoplePickerItem.types';
 import { getStyles } from '../BasePicker.styles';
 import { IObjectWithKey } from '@uifabric/utilities';
+import { getPropsWithDefaults } from '@uifabric/utilities';
 
 /**
  * PeoplePicker props interface which renders Personas as items.
@@ -25,57 +26,91 @@ export interface IPeoplePickerProps extends IBasePickerProps<IPersonaProps> {}
 /**
  * {@docCategory PeoplePicker}
  */
-export class BasePeoplePicker extends BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps> {}
+export const BasePeoplePicker = React.forwardRef(
+  (
+    props: IPeoplePickerProps,
+    forwardedRef: React.Ref<BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>,
+  ) => {
+    return <BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps> {...props} ref={forwardedRef} />;
+  },
+);
+BasePeoplePicker.displayName = 'BasePeoplePicker';
 
 /**
  * {@docCategory PeoplePicker}
  */
-export class MemberListPeoplePicker extends BasePickerListBelow<IPersonaProps, IPeoplePickerProps> {}
+export const MemberListPeoplePicker = React.forwardRef(
+  (props: IPeoplePickerProps, forwardedRef: React.Ref<BasePickerListBelow<IPersonaProps, IPeoplePickerProps>>) => {
+    return <BasePickerListBelow<IPersonaProps, IPeoplePickerProps> {...props} ref={forwardedRef} />;
+  },
+);
+MemberListPeoplePicker.displayName = 'MemberListPeoplePicker';
 
+const DEFAULT_NORMAL_PEOPLE_PICKER_BASE_PROPS = {
+  onRenderItem: (props: IPeoplePickerItemSelectedProps) => <PeoplePickerItem {...props} />,
+  onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps) => (
+    <PeoplePickerItemSuggestion personaProps={personaProps} suggestionsProps={suggestionsProps} />
+  ),
+  createGenericItem: createGenericItem,
+} as const;
 /**
  * Standard People Picker.
  * {@docCategory PeoplePicker}
  */
-export class NormalPeoplePickerBase extends BasePeoplePicker {
-  /** Default props for NormalPeoplePicker. */
-  public static defaultProps = {
-    onRenderItem: (props: IPeoplePickerItemSelectedProps) => <PeoplePickerItem {...props} />,
-    onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps) => (
-      <PeoplePickerItemSuggestion personaProps={personaProps} suggestionsProps={suggestionsProps} />
-    ),
-    createGenericItem: createGenericItem,
-  };
-}
+export const NormalPeoplePickerBase = React.forwardRef(
+  (
+    propsWithoutDefaults: IPeoplePickerProps,
+    forwardedRef: React.Ref<BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>,
+  ) => {
+    const props = getPropsWithDefaults(DEFAULT_NORMAL_PEOPLE_PICKER_BASE_PROPS, propsWithoutDefaults);
+    return <BasePeoplePicker {...props} ref={forwardedRef} />;
+  },
+);
+NormalPeoplePickerBase.displayName = 'NormalPeoplePickerBase';
 
+const DEFAULT_COMPACT_PEOPLE_PICKER_BASE_PROPS = {
+  onRenderItem: (props: IPeoplePickerItemSelectedProps) => <PeoplePickerItem {...props} />,
+  onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps) => (
+    <PeoplePickerItemSuggestion personaProps={personaProps} suggestionsProps={suggestionsProps} compact={true} />
+  ),
+  createGenericItem: createGenericItem,
+} as const;
 /**
  * Compact layout. It uses personas without secondary text when displaying search results.
  * {@docCategory PeoplePicker}
  */
-export class CompactPeoplePickerBase extends BasePeoplePicker {
-  /** Default props for CompactPeoplePicker. */
-  public static defaultProps = {
-    onRenderItem: (props: IPeoplePickerItemSelectedProps) => <PeoplePickerItem {...props} />,
-    onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps) => (
-      <PeoplePickerItemSuggestion personaProps={personaProps} suggestionsProps={suggestionsProps} compact={true} />
-    ),
-    createGenericItem: createGenericItem,
-  };
-}
+export const CompactPeoplePickerBase = React.forwardRef(
+  (
+    propsWithoutDefaults: IPeoplePickerProps,
+    forwardedRef: React.Ref<BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>,
+  ) => {
+    const props = getPropsWithDefaults(DEFAULT_COMPACT_PEOPLE_PICKER_BASE_PROPS, propsWithoutDefaults);
+    return <BasePeoplePicker {...props} ref={forwardedRef} />;
+  },
+);
+CompactPeoplePickerBase.displayName = 'CompactPeoplePickerBase';
 
+const DEFAULT_LIST_PEOPLE_PICKER_BASE_PROPS = {
+  onRenderItem: (props: IPeoplePickerItemSelectedProps) => <PeoplePickerItem {...props} />,
+  onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps) => (
+    <PeoplePickerItemSuggestion personaProps={personaProps} suggestionsProps={suggestionsProps} compact={true} />
+  ),
+  createGenericItem: createGenericItem,
+} as const;
 /**
  * MemberList layout. The selected people show up below the search box.
  * {@docCategory PeoplePicker}
  */
-export class ListPeoplePickerBase extends MemberListPeoplePicker {
-  /** Default props for ListPeoplePicker. */
-  public static defaultProps = {
-    onRenderItem: (props: IPeoplePickerItemSelectedProps) => <PeoplePickerItem {...props} />,
-    onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps) => (
-      <PeoplePickerItemSuggestion personaProps={personaProps} suggestionsProps={suggestionsProps} />
-    ),
-    createGenericItem: createGenericItem,
-  };
-}
+export const ListPeoplePickerBase = React.forwardRef(
+  (
+    propsWithoutDefaults: IPeoplePickerProps,
+    forwardedRef: React.Ref<BasePickerListBelow<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>,
+  ) => {
+    const props = getPropsWithDefaults(DEFAULT_LIST_PEOPLE_PICKER_BASE_PROPS, propsWithoutDefaults);
+    return <MemberListPeoplePicker {...props} ref={forwardedRef} />;
+  },
+);
+ListPeoplePickerBase.displayName = 'ListPeoplePickerBase';
 
 /**
  * {@docCategory PeoplePicker}

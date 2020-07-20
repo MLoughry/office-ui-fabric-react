@@ -58,8 +58,7 @@ import { ThemeProviderProps } from '@fluentui/react-theme-provider';
 import { useTheme } from '@fluentui/react-theme-provider';
 
 // @public (undocumented)
-export class BasePeoplePicker extends BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps> {
-}
+export const BasePeoplePicker: React.ForwardRefExoticComponent<IPeoplePickerProps & React.RefAttributes<BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>>;
 
 // @public (undocumented)
 export class BasePeopleSelectedItemsList extends BaseSelectedItemsList<IExtendedPersonaProps, ISelectedPeopleProps> {
@@ -276,13 +275,7 @@ export class ColorPickerGridCellBase extends React.PureComponent<IColorPickerGri
 export const CompactPeoplePicker: React.FunctionComponent<IPeoplePickerProps>;
 
 // @public
-export class CompactPeoplePickerBase extends BasePeoplePicker {
-    static defaultProps: {
-        onRenderItem: (props: IPeoplePickerItemSelectedProps) => JSX.Element;
-        onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps<IObjectWithKey> | undefined) => JSX.Element;
-        createGenericItem: typeof createGenericItem;
-    };
-}
+export const CompactPeoplePickerBase: React.ForwardRefExoticComponent<IPeoplePickerProps & React.RefAttributes<BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>>;
 
 // @public (undocumented)
 export function createGenericItem(name: string, currentValidationState: ValidationState): IGenericItem & {
@@ -2185,13 +2178,7 @@ export type LinkSlotProps = {
 export const ListPeoplePicker: React.FunctionComponent<IPeoplePickerProps>;
 
 // @public
-export class ListPeoplePickerBase extends MemberListPeoplePicker {
-    static defaultProps: {
-        onRenderItem: (props: IPeoplePickerItemSelectedProps) => JSX.Element;
-        onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps<IObjectWithKey> | undefined) => JSX.Element;
-        createGenericItem: typeof createGenericItem;
-    };
-}
+export const ListPeoplePickerBase: React.ForwardRefExoticComponent<IPeoplePickerProps & React.RefAttributes<BasePickerListBelow<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>>;
 
 // @public (undocumented)
 export class MaskedTextField extends React.Component<ITextFieldProps, IMaskedTextFieldState> implements ITextField {
@@ -2232,8 +2219,7 @@ export const MeasuredContext: React.Context<{
 }>;
 
 // @public (undocumented)
-export class MemberListPeoplePicker extends BasePickerListBelow<IPersonaProps, IPeoplePickerProps> {
-}
+export const MemberListPeoplePicker: React.ForwardRefExoticComponent<IPeoplePickerProps & React.RefAttributes<BasePickerListBelow<IPersonaProps, IPeoplePickerProps>>>;
 
 // @public (undocumented)
 export const Modal: React.FunctionComponent<IModalProps>;
@@ -2261,13 +2247,7 @@ export class ModalBase extends React.Component<IModalProps, IDialogState> implem
 export const NormalPeoplePicker: React.FunctionComponent<IPeoplePickerProps>;
 
 // @public
-export class NormalPeoplePickerBase extends BasePeoplePicker {
-    static defaultProps: {
-        onRenderItem: (props: IPeoplePickerItemSelectedProps) => JSX.Element;
-        onRenderSuggestionsItem: (personaProps: IPersonaProps, suggestionsProps?: IBasePickerSuggestionsProps<IObjectWithKey> | undefined) => JSX.Element;
-        createGenericItem: typeof createGenericItem;
-    };
-}
+export const NormalPeoplePickerBase: React.ForwardRefExoticComponent<IPeoplePickerProps & React.RefAttributes<BasePicker<IPersonaProps & IObjectWithKey, IPeoplePickerProps>>>;
 
 // @public (undocumented)
 export const ONKEYDOWN_TIMEOUT_DURATION = 1000;
@@ -2710,15 +2690,8 @@ export const TagItemSuggestionBase: (props: ITagItemSuggestionProps) => JSX.Elem
 // @public (undocumented)
 export const TagPicker: React.FunctionComponent<ITagPickerProps>;
 
-// @public (undocumented)
-export class TagPickerBase extends BasePicker<ITag, ITagPickerProps> {
-    constructor(props: ITagPickerProps);
-    // (undocumented)
-    static defaultProps: {
-        onRenderItem: (props: ITagItemProps) => JSX.Element;
-        onRenderSuggestionsItem: (props: ITag) => JSX.Element;
-    };
-}
+// @public
+export const TagPickerBase: React.ForwardRefExoticComponent<ITagPickerProps & React.RefAttributes<BasePicker<ITag, ITagPickerProps>>>;
 
 // @public (undocumented)
 export const TextField: React.FunctionComponent<ITextFieldProps>;
